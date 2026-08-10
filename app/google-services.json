@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "406051304915",
+    "project_id": "nexlock-ca220",
+    "storage_bucket": "nexlock-ca220.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:406051304915:android:7d081b5304943cbcc2ab26",
+        "android_client_info": {
+          "package_name": "com.nexlock.agent"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyApiI-8UWPF09jxL-699t-GBwgv5fl_Zzs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
