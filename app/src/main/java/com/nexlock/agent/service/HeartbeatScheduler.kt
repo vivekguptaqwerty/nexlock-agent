@@ -16,10 +16,15 @@ object HeartbeatScheduler {
     const val WORK_NAME = "HeartbeatWorkerTask"
 
     fun schedule(context: Context) {
-        // Low-frequency baseline (cost-efficiency decision from the architecture review) —
-        // the 24h periodic cycle is just a health-check floor; real signal timing comes from
-        // event-triggered heartbeats and FCM-pushed commands, not from polling frequently.
-        val workRequest = PeriodicWorkRequestBuilder<HeartbeatWorker>(24, TimeUnit.HOURS)
+        // 15 minutes is Android WorkManager's minimum periodic interval — used here
+        // deliberately, not as a low-frequency health-check floor. Real hardware testing
+        // showed FCM-pushed commands and boot-time sync can both fail to reach the device on
+        // some OEM battery managers (observed on ColorOS) with nothing else picking up pending
+        // commands until the next attempt. HeartbeatWorker now also checks for pending commands
+        // on every run (see HeartbeatWorker), so this interval is the reliable backstop for
+        // command delivery, not just a telemetry ping — the tradeoff is battery usage, accepted
+        // because a lock/unlock command silently sitting for up to 24h is worse.
+        val workRequest = PeriodicWorkRequestBuilder<HeartbeatWorker>(15, TimeUnit.MINUTES)
             .setConstraints(
                 Constraints.Builder()
                     .setRequiredNetworkType(NetworkType.CONNECTED)

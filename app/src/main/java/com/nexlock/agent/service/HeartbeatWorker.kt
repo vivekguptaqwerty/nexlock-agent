@@ -36,10 +36,17 @@ class HeartbeatWorker(
             fcmToken = currentFcmToken()
         )
 
-        return if (result.isSuccess) {
-            Result.success()
-        } else {
-            Result.retry()
+        if (result.isFailure) {
+            return Result.retry()
         }
+
+        // This periodic worker is the one path in the app with a real NetworkType.CONNECTED
+        // constraint AND WorkManager-managed retry — unlike FCM push (silently dropped by some
+        // OEM battery managers, observed on real hardware) or the boot-time sync (only fires
+        // once per reboot). Checking for pending commands here too means there is at least one
+        // periodic, reliable backstop that doesn't depend on either of those working.
+        CommandSync.fetchExecuteAck(applicationContext, deviceToken)
+
+        return Result.success()
     }
 }
