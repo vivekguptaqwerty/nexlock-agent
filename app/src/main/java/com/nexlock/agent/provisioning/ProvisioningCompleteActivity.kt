@@ -16,10 +16,12 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import androidx.work.await
 import com.nexlock.agent.MainActivity
 import com.nexlock.agent.service.ProvisioningHandshakeWorker
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Shown immediately after Setup Wizard hands control back to this app at the end of Device
@@ -43,12 +45,35 @@ class ProvisioningCompleteActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             val workManager = WorkManager.getInstance(applicationContext)
-            val finished = workManager
-                .getWorkInfosForUniqueWorkFlow(ProvisioningHandshakeWorker.WORK_NAME)
-                .first { infos -> infos.any { it.state.isFinished } || infos.isEmpty() }
 
-            // Whether the handshake succeeded or failed, MainActivity is the right next screen
-            // either way — on failure it still offers the manual OTP form as a recovery path.
+            // Query the current state eagerly first, rather than only observing the Flow —
+            // if the worker already finished (a real possibility: WorkManager can run it
+            // near-instantly, before this Activity's onCreate even starts observing) an
+            // observer that only reacts to *future* emissions could otherwise miss it.
+            val alreadyFinished = workManager
+                .getWorkInfosForUniqueWork(ProvisioningHandshakeWorker.WORK_NAME)
+                .await()
+
+            val finished = if (alreadyFinished.any { it.state.isFinished } || alreadyFinished.isEmpty()) {
+                alreadyFinished
+            } else {
+                // Not finished yet — observe for the completion, but never hang forever: if
+                // something (a stuck retry loop, an OEM WorkManager quirk) keeps this from
+                // resolving, fall through to MainActivity anyway after a bounded wait rather
+                // than leaving the user stuck on a screen that isn't telling the truth about
+                // what's actually happening. The worker keeps running to completion in the
+                // background regardless of what this screen does.
+                withTimeoutOrNull(45_000) {
+                    workManager
+                        .getWorkInfosForUniqueWorkFlow(ProvisioningHandshakeWorker.WORK_NAME)
+                        .first { infos -> infos.any { it.state.isFinished } || infos.isEmpty() }
+                } ?: emptyList()
+            }
+
+            // Whether the handshake succeeded, failed, or timed out inconclusively, MainActivity
+            // is the right next screen either way — on anything but confirmed success it still
+            // offers the manual OTP form as a recovery path, and will show the enrolled
+            // dashboard on next launch if the worker actually succeeded just after this timeout.
             val enrolledSuccessfully = finished.any { it.state == WorkInfo.State.SUCCEEDED }
             startActivity(
                 Intent(this@ProvisioningCompleteActivity, MainActivity::class.java).apply {
