@@ -23,6 +23,13 @@ import kotlinx.coroutines.launch
  * reboot on its own (the process and task stack are gone), so if the device was locked when it
  * went down, this relaunches KioskLockActivity immediately rather than leaving a locked device
  * sitting on its normal home screen after a restart.
+ *
+ * Also reasserts the baseline (Tier A) restrictions — factory-reset block, uninstall block,
+ * etc. — on every boot, independent of lock state. These are meant to be OS-persisted
+ * automatically, but re-applying them defensively here means a restriction that failed to
+ * stick the first time (for whatever reason — see DeviceRestrictionPolicy's verification
+ * logging) gets a second chance to apply on every single boot, rather than only ever being
+ * attempted once at enrollment time.
  */
 class BootReceiver : BroadcastReceiver() {
 
@@ -32,6 +39,8 @@ class BootReceiver : BroadcastReceiver() {
         val tokenManager = TokenManager(context)
         if (!tokenManager.isEnrolled()) return
         val deviceToken = tokenManager.getDeviceToken() ?: return
+
+        DeviceRestrictionPolicy.applyBaselineRestrictions(context)
 
         if (LockStateManager(context).isLocked()) {
             reassertKioskLock(context)
