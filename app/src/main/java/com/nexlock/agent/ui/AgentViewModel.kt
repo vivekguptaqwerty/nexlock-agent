@@ -69,8 +69,10 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
         NetworkModule.setBaseUrl(serverUrlInput)
 
         // Real device identity read from the OS instead of hardcoded placeholder values —
-        // still just standard, non-privileged android.os.Build/Settings.Secure fields (no
-        // Device Owner / attestation work, which remains Phase 3).
+        // standard, non-privileged android.os.Build/Settings.Secure fields. This manual form
+        // is now a support-recovery fallback; the primary enrollment path is the automatic
+        // handshake ProvisioningHandshakeWorker performs right after real QR-based Device
+        // Owner provisioning completes (see NexLockDeviceAdminReceiver).
         val realAndroidId = try {
             Settings.Secure.getString(getApplication<Application>().contentResolver, Settings.Secure.ANDROID_ID)
                 ?: "UNKNOWN"
