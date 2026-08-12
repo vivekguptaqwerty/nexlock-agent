@@ -1,6 +1,6 @@
 package com.nexlock.agent
 
-import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -13,17 +13,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nexlock.agent.data.storage.LockStateManager
+import com.nexlock.agent.kiosk.KioskLockActivity
 import com.nexlock.agent.ui.AgentViewModel
 
 class MainActivity : ComponentActivity() {
@@ -32,6 +31,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Closes the "tap the app icon while locked" escape path — if a LOCK command is
+        // active, redirect straight to the kiosk screen instead of showing the normal
+        // dashboard/enrollment UI.
+        if (LockStateManager(this).isLocked()) {
+            redirectToKioskLock()
+            return
+        }
+
         setContent {
             MaterialTheme {
                 Surface(
@@ -42,6 +50,18 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (LockStateManager(this).isLocked()) {
+            redirectToKioskLock()
+        }
+    }
+
+    private fun redirectToKioskLock() {
+        startActivity(Intent(this, KioskLockActivity::class.java))
+        finish()
     }
 }
 
@@ -65,69 +85,11 @@ fun AgentMainScreen(viewModel: AgentViewModel) {
             letterSpacing = 2.sp
         )
         Text(
-            text = "Android Enterprise Agent Node • Command Pipeline Engine",
+            text = "Device Owner Agent • Command Pipeline Engine",
             color = Color(0xFF94A3B8),
             fontSize = 12.sp,
             modifier = Modifier.padding(bottom = 20.dp)
         )
-
-        // --------------------------------------------------------------------------------
-        // PHASE 3.0 DEVICE OWNER POC — TEMPORARY TEST SCAFFOLDING, NOT PRODUCTION CODE.
-        // Manually validates that a Device-Owner-granted lockTaskAllowed policy actually
-        // lets this app pin/unpin itself in a non-escapable full-screen state, independent
-        // of the backend's FCM/command pipeline (which doesn't call this yet). Remove once
-        // the POC is validated and real command-triggered LockTask logic is wired in.
-        // --------------------------------------------------------------------------------
-        val activity = LocalContext.current as? Activity
-        var lockTaskPocStatus by remember { mutableStateOf("Not pinned") }
-
-        Card(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF422006)),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("DEVICE OWNER POC — LOCKTASK TEST", color = Color(0xFFFBBF24), fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    "Temporary scaffolding for Phase 3.0 validation only.",
-                    color = Color(0xFFFCD34D),
-                    fontSize = 11.sp,
-                    modifier = Modifier.padding(bottom = 10.dp)
-                )
-                Text("Status: $lockTaskPocStatus", color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(bottom = 10.dp))
-
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(
-                        onClick = {
-                            try {
-                                activity?.startLockTask()
-                                lockTaskPocStatus = "PINNED (startLockTask succeeded)"
-                            } catch (e: Exception) {
-                                lockTaskPocStatus = "FAILED: ${e.message}"
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB91C1C))
-                    ) {
-                        Text("LOCK (pin)", fontSize = 12.sp)
-                    }
-                    Button(
-                        onClick = {
-                            try {
-                                activity?.stopLockTask()
-                                lockTaskPocStatus = "UNPINNED (stopLockTask succeeded)"
-                            } catch (e: Exception) {
-                                lockTaskPocStatus = "FAILED: ${e.message}"
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
-                    ) {
-                        Text("UNLOCK (unpin)", fontSize = 12.sp)
-                    }
-                }
-            }
-        }
 
         // Server Configuration Card
         Card(
