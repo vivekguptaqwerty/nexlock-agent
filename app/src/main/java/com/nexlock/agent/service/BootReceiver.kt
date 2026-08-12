@@ -5,13 +5,9 @@ import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import com.nexlock.agent.data.repository.DeviceRepository
 import com.nexlock.agent.data.storage.LockStateManager
 import com.nexlock.agent.data.storage.TokenManager
 import com.nexlock.agent.kiosk.KioskLockActivity
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 /**
  * Restores the Agent's session after a device reboot, without needing MainActivity to be
@@ -38,7 +34,7 @@ class BootReceiver : BroadcastReceiver() {
 
         val tokenManager = TokenManager(context)
         if (!tokenManager.isEnrolled()) return
-        val deviceToken = tokenManager.getDeviceToken() ?: return
+        if (tokenManager.getDeviceToken() == null) return
 
         DeviceRestrictionPolicy.applyBaselineRestrictions(context)
 
@@ -51,27 +47,12 @@ class BootReceiver : BroadcastReceiver() {
             RetryWorker.scheduleOneShot(context)
         }
 
-        CoroutineScope(Dispatchers.IO).launch {
-            // Event-triggered heartbeat equivalent to "app opened" — the Agent is effectively
-            // starting a fresh session after boot, even though no UI was ever shown.
-            val telemetry = DeviceTelemetry.capture(context)
-            DeviceRepository().sendHeartbeat(
-                deviceToken = deviceToken,
-                batteryLevel = telemetry.batteryLevel,
-                isCharging = telemetry.isCharging,
-                networkType = telemetry.networkType,
-                networkOperator = telemetry.networkOperator,
-                storageAvailableMb = telemetry.storageAvailableMb,
-                storageTotalMb = telemetry.storageTotalMb,
-                ramAvailableMb = telemetry.ramAvailableMb,
-                ramTotalMb = telemetry.ramTotalMb,
-                screenState = telemetry.screenState,
-                appVersion = telemetry.appVersion,
-                fcmToken = currentFcmToken()
-            )
-
-            CommandSync.fetchExecuteAck(context, deviceToken)
-        }
+        // Enqueued as a network-constrained WorkManager job rather than fired directly as a
+        // coroutine: BOOT_COMPLETED does not guarantee network connectivity is up yet, and a
+        // raw one-shot call that loses that race would fail silently with nothing to retry it
+        // until the next scheduled heartbeat (up to 24h later). BootSyncWorker won't start
+        // until connectivity is actually available, and retries with backoff on failure.
+        BootSyncWorker.enqueue(context)
     }
 
     private fun reassertKioskLock(context: Context) {

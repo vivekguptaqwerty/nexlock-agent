@@ -1,7 +1,11 @@
 package com.nexlock.agent.provisioning
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -75,6 +79,11 @@ class ProvisioningCompleteActivity : ComponentActivity() {
             // offers the manual OTP form as a recovery path, and will show the enrolled
             // dashboard on next launch if the worker actually succeeded just after this timeout.
             val enrolledSuccessfully = finished.any { it.state == WorkInfo.State.SUCCEEDED }
+
+            if (enrolledSuccessfully) {
+                requestBatteryOptimizationExemption()
+            }
+
             startActivity(
                 Intent(this@ProvisioningCompleteActivity, MainActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -85,7 +94,31 @@ class ProvisioningCompleteActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Without this, aggressive Doze/App Standby (and OEM-specific battery managers) can defer
+     * or drop the FCM wake pushes and boot-time sync this app depends on to receive lock/unlock
+     * commands reliably — exactly the kind of delivery gap flagged in the original audit and
+     * confirmed on real hardware during Phase 3 testing. This is the standard public API for
+     * requesting the exemption; it shows one system confirmation dialog (there is no documented
+     * fully-silent Device-Owner-only variant to fall back to), asked once here right after
+     * enrollment rather than left for the customer to encounter later.
+     */
+    private fun requestBatteryOptimizationExemption() {
+        try {
+            val powerManager = getSystemService(POWER_SERVICE) as? PowerManager ?: return
+            if (powerManager.isIgnoringBatteryOptimizations(packageName)) return
+
+            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:$packageName")
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.w(TAG, "Battery optimization exemption request failed", e)
+        }
+    }
+
     companion object {
+        private const val TAG = "ProvisioningComplete"
         const val EXTRA_AUTO_ENROLLED = "auto_enrolled"
     }
 }
