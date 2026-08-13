@@ -74,6 +74,66 @@ object DeviceRestrictionPolicy {
         verifyAppliedRestrictions(context, dpm, admin)
     }
 
+    /**
+     * The other half of the loan lifecycle: fully de-provisions the device when the EMI is
+     * paid off, not just lifting the payment-status-dependent lock (that's UNLOCK's job — see
+     * CommandDispatcher). This must leave the device completely indistinguishable from a
+     * never-managed phone: restrictions cleared, uninstall allowed, and Device Owner status
+     * itself removed via clearDeviceOwnerApp() so there's no lingering "this device is managed
+     * by your organization" messaging and Settings > Reset options works normally again.
+     *
+     * clearDeviceOwnerApp() is the point of no return — once called, this app loses all
+     * Device-Owner-privileged DPM access for good (matching real device release; there's no
+     * path back to Device Owner without a fresh factory reset and re-provisioning), so it's
+     * called last, after every other cleanup step that still needs Device Owner privilege.
+     * It's flagged deprecated in the SDK with no replacement API — still the only public way
+     * to do this as of API 34, so the deprecation is suppressed deliberately, not overlooked.
+     */
+    @Suppress("DEPRECATION")
+    fun releaseDevice(context: Context): Boolean {
+        val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as? DevicePolicyManager
+        if (dpm == null) {
+            Log.e(TAG, "DevicePolicyManager unavailable — cannot release device")
+            return false
+        }
+        val admin = ComponentName(context, NexLockDeviceAdminReceiver::class.java)
+
+        val isDeviceOwner = try {
+            dpm.isDeviceOwnerApp(context.packageName)
+        } catch (e: Exception) {
+            Log.e(TAG, "isDeviceOwnerApp() check threw during release", e)
+            false
+        }
+        if (!isDeviceOwner) {
+            Log.w(TAG, "Not Device Owner — nothing to release (already a normal, unmanaged app)")
+            return true
+        }
+
+        for (restriction in TARGET_RESTRICTIONS) {
+            try {
+                dpm.clearUserRestriction(admin, restriction)
+                Log.i(TAG, "clearUserRestriction($restriction) completed")
+            } catch (e: Exception) {
+                Log.e(TAG, "clearUserRestriction($restriction) THREW", e)
+            }
+        }
+
+        try {
+            dpm.setUninstallBlocked(admin, context.packageName, false)
+        } catch (e: Exception) {
+            Log.e(TAG, "setUninstallBlocked(false) failed", e)
+        }
+
+        return try {
+            dpm.clearDeviceOwnerApp(context.packageName)
+            Log.i(TAG, "clearDeviceOwnerApp succeeded — device is fully released")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "clearDeviceOwnerApp FAILED — device remains under Device Owner management", e)
+            false
+        }
+    }
+
     private fun applyRestriction(dpm: DevicePolicyManager, admin: ComponentName, restriction: String) {
         try {
             dpm.addUserRestriction(admin, restriction)
