@@ -3,6 +3,7 @@ package com.nexlock.agent.service
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
+import android.os.Build
 import android.os.UserManager
 import android.util.Log
 
@@ -71,6 +72,9 @@ object DeviceRestrictionPolicy {
             Log.e(TAG, "setLockTaskFeatures failed", e)
         }
 
+        applyUserControlLock(context, dpm, admin)
+        grantNotificationPermission(context, dpm, admin)
+
         verifyAppliedRestrictions(context, dpm, admin)
     }
 
@@ -124,6 +128,8 @@ object DeviceRestrictionPolicy {
             Log.e(TAG, "setUninstallBlocked(false) failed", e)
         }
 
+        clearUserControlLock(dpm, admin)
+
         return try {
             dpm.clearDeviceOwnerApp(context.packageName)
             Log.i(TAG, "clearDeviceOwnerApp succeeded — device is fully released")
@@ -131,6 +137,61 @@ object DeviceRestrictionPolicy {
         } catch (e: Exception) {
             Log.e(TAG, "clearDeviceOwnerApp FAILED — device remains under Device Owner management", e)
             false
+        }
+    }
+
+    /**
+     * Prevents the user from force-stopping this app or clearing its data/battery-optimization
+     * exemption from Settings — API 30+ only (setUserControlDisabledPackages was added in
+     * Android 11). This closes the gap where a customer re-enables the OS's own battery
+     * restriction on the Agent after enrollment, silently breaking background command delivery
+     * (observed on real hardware before this existed). It does NOT reach OEM-proprietary
+     * restrictions layered on top of stock Android (ColorOS "Auto Launch", MIUI "Autostart",
+     * etc.) — no public Android API grants control over those, Device Owner or not.
+     */
+    private fun applyUserControlLock(context: Context, dpm: DevicePolicyManager, admin: ComponentName) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            Log.w(TAG, "setUserControlDisabledPackages unavailable below API 30 (this device: ${Build.VERSION.SDK_INT}) — skipping")
+            return
+        }
+        try {
+            dpm.setUserControlDisabledPackages(admin, listOf(context.packageName))
+            val active = dpm.getUserControlDisabledPackages(admin)
+            Log.i(TAG, "VERIFIED setUserControlDisabledPackages: $active")
+        } catch (e: Exception) {
+            Log.e(TAG, "setUserControlDisabledPackages failed", e)
+        }
+    }
+
+    private fun clearUserControlLock(dpm: DevicePolicyManager, admin: ComponentName) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        try {
+            dpm.setUserControlDisabledPackages(admin, emptyList())
+            Log.i(TAG, "cleared setUserControlDisabledPackages")
+        } catch (e: Exception) {
+            Log.e(TAG, "clearing setUserControlDisabledPackages failed", e)
+        }
+    }
+
+    /**
+     * POST_NOTIFICATIONS is a runtime-dangerous permission on API 33+ — without it,
+     * HeartbeatForegroundService's persistent notification silently never shows (the service
+     * itself still runs, but invisibly, defeating the point of a *visible* "this app matters"
+     * signal to the OS's process management). Device Owner apps can self-grant this instead of
+     * showing a runtime permission prompt during setup.
+     */
+    private fun grantNotificationPermission(context: Context, dpm: DevicePolicyManager, admin: ComponentName) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        try {
+            dpm.setPermissionGrantState(
+                admin,
+                context.packageName,
+                android.Manifest.permission.POST_NOTIFICATIONS,
+                DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
+            )
+            Log.i(TAG, "Granted POST_NOTIFICATIONS via Device Owner self-grant")
+        } catch (e: Exception) {
+            Log.e(TAG, "setPermissionGrantState(POST_NOTIFICATIONS) failed", e)
         }
     }
 
