@@ -122,6 +122,8 @@ class CommandDispatcher(private val context: Context) {
         // ran is still used to send the ACK for this command, so clearing it here doesn't
         // affect that in-flight call.
         TokenManager(context).clear()
+        HeartbeatScheduler.cancel(context)
+        HeartbeatForegroundService.stop(context)
 
         return ExecutionResult(status = "SUCCESS")
     }

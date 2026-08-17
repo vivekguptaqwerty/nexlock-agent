@@ -10,6 +10,13 @@
          emergency numbers are exempt from the runtime grant, but the intent still needs this
          declared in the manifest to resolve at all. -->
     <uses-permission android:name="android.permission.CALL_PHONE" />
+    <!-- HeartbeatForegroundService: a persistent foreground service (not a one-shot WorkManager
+         promotion) that keeps command delivery working under aggressive OEM battery managers.
+         systemExempted is the type Android reserves for Device Owner/Admin apps specifically —
+         no execution time limit, unlike dataSync's 6h/24h cap. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="true"
@@ -48,6 +55,11 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <service
+            android:name=".service.HeartbeatForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="systemExempted" />
 
         <receiver
             android:name=".service.BootReceiver"
