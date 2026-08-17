@@ -8,17 +8,16 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nexlock.agent.data.storage.LockStateManager
@@ -44,7 +43,7 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = Color(0xFF0F172A) // Dark MDM theme
+                    color = Color(0xFF0F172A) // Matches the kiosk lock screen's brand color
                 ) {
                     AgentMainScreen(viewModel)
                 }
@@ -65,6 +64,18 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * This screen is what the *customer* sees on their own financed phone — deliberately minimal
+ * and free of anything technical (no server URLs, device tokens/IDs, raw command-pipeline
+ * state, or a way to reset enrollment). Heartbeat and command sync still happen automatically
+ * (AgentViewModel's init block + HeartbeatForegroundService/HeartbeatScheduler running in the
+ * background) — there's just nothing left here for the customer to manually trigger or break.
+ *
+ * The enrollment form below only appears pre-enrollment, which in practice means a dealer doing
+ * a manual fallback at point of sale (the primary path is automatic, via QR-based Device Owner
+ * provisioning — see ProvisioningHandshakeWorker) — a customer holding an already-provisioned
+ * phone will only ever see the "protected" state.
+ */
 @Composable
 fun AgentMainScreen(viewModel: AgentViewModel) {
     val scrollState = rememberScrollState()
@@ -72,214 +83,147 @@ fun AgentMainScreen(viewModel: AgentViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(20.dp)
+            .padding(24.dp)
             .verticalScroll(scrollState),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        // App Title Header
         Text(
-            text = "NEXLOCK AGENT",
-            color = Color(0xFF38BDF8),
-            fontSize = 24.sp,
+            text = "NexLock",
+            color = Color.White,
+            fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
-            letterSpacing = 2.sp
-        )
-        Text(
-            text = "Device Owner Agent • Command Pipeline Engine",
-            color = Color(0xFF94A3B8),
-            fontSize = 12.sp,
-            modifier = Modifier.padding(bottom = 20.dp)
+            letterSpacing = 1.sp
         )
 
-        // Server Configuration Card
-        Card(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-            shape = RoundedCornerShape(12.dp)
+        Spacer(modifier = Modifier.height(32.dp))
+
+        if (!viewModel.isEnrolled) {
+            EnrollmentCard(viewModel)
+        } else {
+            ProtectedStatusCard(lastSyncedAt = viewModel.lastHeartbeatTime)
+        }
+    }
+}
+
+@Composable
+private fun ProtectedStatusCard(lastSyncedAt: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("BACKEND SERVER URL", color = Color(0xFF64748B), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                OutlinedTextField(
-                    value = viewModel.serverUrlInput,
-                    onValueChange = { viewModel.serverUrlInput = it },
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF38BDF8),
-                        unfocusedBorderColor = Color(0xFF475569),
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
-                    ),
-                    singleLine = true
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .background(Color(0xFF166534), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "✓",
+                    color = Color(0xFF4ADE80),
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "This device is protected",
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "NexLock is running in the background. No action needed.",
+                color = Color(0xFF94A3B8),
+                fontSize = 13.sp,
+                textAlign = TextAlign.Center
+            )
+
+            if (lastSyncedAt != "Not sent yet") {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Last synced at $lastSyncedAt",
+                    color = Color(0xFF64748B),
+                    fontSize = 12.sp
                 )
             }
         }
+    }
+}
 
-        if (!viewModel.isEnrolled) {
-            // ENROLLMENT HANDSHAKE CARD
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text("DEVICE ENROLLMENT HANDSHAKE", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Text("Enter the Enrollment Token or 6-digit OTP generated by the Dealer App.", color = Color(0xFF94A3B8), fontSize = 13.sp, modifier = Modifier.padding(bottom = 16.dp))
+@Composable
+private fun EnrollmentCard(viewModel: AgentViewModel) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(24.dp)) {
+            Text("Set Up This Device", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text(
+                "Enter the enrollment code or 6-digit OTP provided by your dealer.",
+                color = Color(0xFF94A3B8),
+                fontSize = 13.sp,
+                modifier = Modifier.padding(top = 4.dp, bottom = 20.dp)
+            )
 
-                    Text("ENROLLMENT TOKEN", color = Color(0xFF64748B), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    OutlinedTextField(
-                        value = viewModel.enrollmentTokenInput,
-                        onValueChange = { viewModel.enrollmentTokenInput = it },
-                        placeholder = { Text("e.g. ENR-89410401-4810...", color = Color(0xFF475569)) },
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF38BDF8),
-                            unfocusedBorderColor = Color(0xFF475569),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
-                        ),
-                        singleLine = true
-                    )
+            OutlinedTextField(
+                value = viewModel.enrollmentTokenInput,
+                onValueChange = { viewModel.enrollmentTokenInput = it },
+                label = { Text("Enrollment Code") },
+                placeholder = { Text("e.g. ENR-89410401-4810...", color = Color(0xFF475569)) },
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFF38BDF8),
+                    unfocusedBorderColor = Color(0xFF475569),
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedLabelColor = Color(0xFF38BDF8),
+                    unfocusedLabelColor = Color(0xFF94A3B8)
+                ),
+                singleLine = true
+            )
 
-                    Text("OR 6-DIGIT OTP", color = Color(0xFF64748B), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    OutlinedTextField(
-                        value = viewModel.otpInput,
-                        onValueChange = { viewModel.otpInput = it },
-                        placeholder = { Text("e.g. 849201", color = Color(0xFF475569)) },
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF38BDF8),
-                            unfocusedBorderColor = Color(0xFF475569),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
-                        ),
-                        singleLine = true
-                    )
+            OutlinedTextField(
+                value = viewModel.otpInput,
+                onValueChange = { viewModel.otpInput = it },
+                label = { Text("Or 6-Digit OTP") },
+                placeholder = { Text("e.g. 849201", color = Color(0xFF475569)) },
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFF38BDF8),
+                    unfocusedBorderColor = Color(0xFF475569),
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedLabelColor = Color(0xFF38BDF8),
+                    unfocusedLabelColor = Color(0xFF94A3B8)
+                ),
+                singleLine = true
+            )
 
-                    viewModel.enrollmentError?.let { err ->
-                        Text(text = err, color = Color(0xFFF87171), fontSize = 13.sp, modifier = Modifier.padding(bottom = 12.dp))
-                    }
-
-                    Button(
-                        onClick = { viewModel.performHandshake() },
-                        enabled = !viewModel.isEnrolling,
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7))
-                    ) {
-                        if (viewModel.isEnrolling) {
-                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                        } else {
-                            Text("PERFORM ENROLLMENT HANDSHAKE", fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
+            viewModel.enrollmentError?.let { err ->
+                Text(text = err, color = Color(0xFFF87171), fontSize = 13.sp, modifier = Modifier.padding(bottom = 12.dp))
             }
-        } else {
-            // ENROLLED TELEMETRY & COMMAND CARD
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-                shape = RoundedCornerShape(12.dp)
+
+            Button(
+                onClick = { viewModel.performHandshake() },
+                enabled = !viewModel.isEnrolling,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7))
             ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("AGENT ENROLLED & ACTIVE", color = Color(0xFF4ADE80), fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        Box(
-                            modifier = Modifier
-                                .background(Color(0xFF166534), RoundedCornerShape(4.dp))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text("ONLINE", color = Color(0xFF4ADE80), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text("DEVICE ID", color = Color(0xFF64748B), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Text(viewModel.deviceId, color = Color.White, fontSize = 13.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(bottom = 12.dp))
-
-                    Text("DEVICE TOKEN (ISSUED JWT)", color = Color(0xFF64748B), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Text(viewModel.deviceToken.take(40) + "...", color = Color(0xFF94A3B8), fontSize = 12.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(bottom = 16.dp))
-
-                    Divider(color = Color(0xFF334155), modifier = Modifier.padding(vertical = 12.dp))
-
-                    // TELEMETRY SECTION
-                    Text("HEARTBEAT TELEMETRY ENGINE", color = Color(0xFF38BDF8), fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Last Heartbeat Sent:", color = Color(0xFF94A3B8), fontSize = 13.sp)
-                        Text(viewModel.lastHeartbeatTime, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    }
-
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Telemetry Status:", color = Color(0xFF94A3B8), fontSize = 13.sp)
-                        Text(viewModel.heartbeatStatus, color = Color(0xFF38BDF8), fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Button(
-                        onClick = { viewModel.sendManualHeartbeat() },
-                        enabled = !viewModel.isSendingHeartbeat,
-                        modifier = Modifier.fillMaxWidth().height(40.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0369A1))
-                    ) {
-                        if (viewModel.isSendingHeartbeat) {
-                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp))
-                        } else {
-                            Text("SEND MANUAL HEARTBEAT PING", fontSize = 12.sp)
-                        }
-                    }
-
-                    Divider(color = Color(0xFF334155), modifier = Modifier.padding(vertical = 14.dp))
-
-                    // COMMAND POLLING & EXECUTION PIPELINE SECTION
-                    Text("MDM COMMAND POLLING & DISPATCHER", color = Color(0xFFA855F7), fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Last Executed Command:", color = Color(0xFF94A3B8), fontSize = 13.sp)
-                        Text(viewModel.lastExecutedCommand ?: "None", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    }
-
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Total Commands Executed:", color = Color(0xFF94A3B8), fontSize = 13.sp)
-                        Text("${viewModel.totalCommandsProcessed}", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    }
-
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Polling Engine Status:", color = Color(0xFF94A3B8), fontSize = 13.sp)
-                        Text(viewModel.commandPollingStatus, color = Color(0xFFA855F7), fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Button(
-                        onClick = { viewModel.pollAndExecuteCommands() },
-                        enabled = !viewModel.isPollingCommands,
-                        modifier = Modifier.fillMaxWidth().height(44.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7E22CE))
-                    ) {
-                        if (viewModel.isPollingCommands) {
-                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp))
-                        } else {
-                            Text("POLL & EXECUTE PENDING COMMANDS NOW")
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    OutlinedButton(
-                        onClick = { viewModel.clearEnrollment() },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFF87171))
-                    ) {
-                        Text("RESET AGENT ENROLLMENT")
-                    }
+                if (viewModel.isEnrolling) {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                } else {
+                    Text("Activate Device", fontWeight = FontWeight.Bold)
                 }
             }
         }
