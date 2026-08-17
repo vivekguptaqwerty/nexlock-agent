@@ -200,19 +200,4 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
         HeartbeatScheduler.schedule(getApplication())
         HeartbeatForegroundService.start(getApplication())
     }
-
-    fun clearEnrollment() {
-        tokenManager.clear()
-        isEnrolled = false
-        deviceId = ""
-        deviceToken = ""
-        heartbeatCount = 0
-        heartbeatStatus = "Idle"
-        lastHeartbeatTime = "Not sent yet"
-        lastExecutedCommand = "None"
-        commandPollingStatus = "Idle"
-        totalCommandsProcessed = 0
-        HeartbeatScheduler.cancel(getApplication())
-        HeartbeatForegroundService.stop(getApplication())
-    }
 }
