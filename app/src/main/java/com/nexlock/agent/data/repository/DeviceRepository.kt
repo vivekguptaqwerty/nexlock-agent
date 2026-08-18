@@ -49,7 +49,12 @@ class DeviceRepository {
         ramTotalMb: Long? = null,
         screenState: String? = null,
         appVersion: String = "1.0.0",
-        fcmToken: String? = null
+        fcmToken: String? = null,
+        simPresent: Boolean? = null,
+        phoneNumber: String? = null,
+        latitude: Double? = null,
+        longitude: Double? = null,
+        locationAccuracy: Float? = null
     ): Result<HeartbeatData> {
         return try {
             val req = HeartbeatRequest(
@@ -63,7 +68,12 @@ class DeviceRepository {
                 ramTotalMb = ramTotalMb,
                 screenState = screenState,
                 appVersion = appVersion,
-                fcmToken = fcmToken
+                fcmToken = fcmToken,
+                simPresent = simPresent,
+                phoneNumber = phoneNumber,
+                latitude = latitude,
+                longitude = longitude,
+                locationAccuracy = locationAccuracy
             )
             val response = NetworkModule.apiService.sendHeartbeat("Bearer $deviceToken", req)
             if (response.isSuccessful && response.body()?.success == true) {

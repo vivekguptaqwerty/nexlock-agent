@@ -21,6 +21,7 @@ class HeartbeatWorker(
         }
 
         val telemetry = DeviceTelemetry.capture(applicationContext)
+        val location = LocationHelper.getCurrentLocation(applicationContext)
         val result = repository.sendHeartbeat(
             deviceToken = deviceToken,
             batteryLevel = telemetry.batteryLevel,
@@ -33,7 +34,12 @@ class HeartbeatWorker(
             ramTotalMb = telemetry.ramTotalMb,
             screenState = telemetry.screenState,
             appVersion = telemetry.appVersion,
-            fcmToken = currentFcmToken()
+            fcmToken = currentFcmToken(),
+            simPresent = telemetry.simPresent,
+            phoneNumber = telemetry.phoneNumber,
+            latitude = location?.latitude,
+            longitude = location?.longitude,
+            locationAccuracy = location?.accuracyMeters
         )
 
         if (result.isFailure) {

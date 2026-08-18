@@ -26,8 +26,8 @@ android {
         applicationId = "com.nexlock.agent"
         minSdk = 26
         targetSdk = 34
-        versionCode = 8
-        versionName = "1.0.7"
+        versionCode = 9
+        versionName = "1.0.8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -98,4 +98,7 @@ dependencies {
 
     // Encrypted token storage (Phase 3 — Agent hardening)
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // Location tracking (Phase 4) — fused GPS/Wi-Fi/cell provider
+    implementation("com.google.android.gms:play-services-location:21.3.0")
 }

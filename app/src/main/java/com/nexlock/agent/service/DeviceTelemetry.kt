@@ -11,6 +11,8 @@ import android.os.Environment
 import android.os.PowerManager
 import android.os.StatFs
 import android.telephony.TelephonyManager
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -27,7 +29,11 @@ data class TelemetrySnapshot(
     val ramTotalMb: Long?,
     val screenState: String?,
     val appVersion: String,
-    val timestamp: String
+    val timestamp: String,
+    val simPresent: Boolean?,
+    // Best-effort — null on most Indian prepaid SIMs regardless of permission grant, since the
+    // carrier frequently never provisions the number into the metadata this API reads from.
+    val phoneNumber: String?
 )
 
 /**
@@ -63,8 +69,39 @@ object DeviceTelemetry {
                 null -> null
             },
             appVersion = readAppVersion(context),
-            timestamp = isoTimestampNow()
+            timestamp = isoTimestampNow(),
+            simPresent = readSimPresent(context),
+            phoneNumber = readPhoneNumber(context)
         )
+    }
+
+    private fun readSimPresent(context: Context): Boolean? {
+        return try {
+            val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+            when (tm?.simState) {
+                null -> null
+                TelephonyManager.SIM_STATE_ABSENT -> false
+                TelephonyManager.SIM_STATE_UNKNOWN -> null
+                else -> true
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun readPhoneNumber(context: Context): String? {
+        if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_PHONE_NUMBERS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            return null
+        }
+        return try {
+            val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+            @Suppress("DEPRECATION")
+            tm?.line1Number?.takeIf { it.isNotBlank() }
+        } catch (e: Exception) {
+            null
+        }
     }
 
     private fun readBattery(context: Context): Pair<Int, Boolean>? {
