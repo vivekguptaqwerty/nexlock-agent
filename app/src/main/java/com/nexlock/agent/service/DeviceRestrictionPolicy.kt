@@ -74,6 +74,7 @@ object DeviceRestrictionPolicy {
 
         applyUserControlLock(context, dpm, admin)
         grantNotificationPermission(context, dpm, admin)
+        grantLocationAndPhonePermissions(context, dpm, admin)
 
         verifyAppliedRestrictions(context, dpm, admin)
     }
@@ -192,6 +193,55 @@ object DeviceRestrictionPolicy {
             Log.i(TAG, "Granted POST_NOTIFICATIONS via Device Owner self-grant")
         } catch (e: Exception) {
             Log.e(TAG, "setPermissionGrantState(POST_NOTIFICATIONS) failed", e)
+        }
+    }
+
+    /**
+     * Location + phone-state permissions for the location-tracking and SIM-detection heartbeat
+     * fields — same self-grant mechanism as POST_NOTIFICATIONS, no runtime prompt shown to the
+     * customer. ACCESS_BACKGROUND_LOCATION must be requested only after the foreground location
+     * permissions are already granted (an Android platform requirement since API 30), so it's
+     * granted in its own call after the other two, not in the same batch.
+     */
+    private fun grantLocationAndPhonePermissions(context: Context, dpm: DevicePolicyManager, admin: ComponentName) {
+        val permissions = listOf(
+            android.Manifest.permission.ACCESS_FINE_LOCATION,
+            android.Manifest.permission.ACCESS_COARSE_LOCATION,
+            android.Manifest.permission.READ_PHONE_STATE
+        )
+        for (permission in permissions) {
+            try {
+                dpm.setPermissionGrantState(admin, context.packageName, permission, DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED)
+                Log.i(TAG, "Granted $permission via Device Owner self-grant")
+            } catch (e: Exception) {
+                Log.e(TAG, "setPermissionGrantState($permission) failed", e)
+            }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                dpm.setPermissionGrantState(
+                    admin,
+                    context.packageName,
+                    android.Manifest.permission.ACCESS_BACKGROUND_LOCATION,
+                    DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
+                )
+                Log.i(TAG, "Granted ACCESS_BACKGROUND_LOCATION via Device Owner self-grant")
+            } catch (e: Exception) {
+                Log.e(TAG, "setPermissionGrantState(ACCESS_BACKGROUND_LOCATION) failed", e)
+            }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                dpm.setPermissionGrantState(
+                    admin,
+                    context.packageName,
+                    android.Manifest.permission.READ_PHONE_NUMBERS,
+                    DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
+                )
+                Log.i(TAG, "Granted READ_PHONE_NUMBERS via Device Owner self-grant")
+            } catch (e: Exception) {
+                Log.e(TAG, "setPermissionGrantState(READ_PHONE_NUMBERS) failed", e)
+            }
         }
     }
 

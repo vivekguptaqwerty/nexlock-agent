@@ -50,7 +50,12 @@ data class HeartbeatRequest(
     @Json(name = "timestamp") val timestamp: String? = null,
     // Refreshed opportunistically — reuses the heartbeat pipeline rather than a dedicated
     // FCM-token-registration endpoint.
-    @Json(name = "fcmToken") val fcmToken: String? = null
+    @Json(name = "fcmToken") val fcmToken: String? = null,
+    @Json(name = "simPresent") val simPresent: Boolean? = null,
+    @Json(name = "phoneNumber") val phoneNumber: String? = null,
+    @Json(name = "latitude") val latitude: Double? = null,
+    @Json(name = "longitude") val longitude: Double? = null,
+    @Json(name = "locationAccuracy") val locationAccuracy: Float? = null
 )
 
 @JsonClass(generateAdapter = true)

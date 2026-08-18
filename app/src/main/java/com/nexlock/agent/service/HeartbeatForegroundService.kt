@@ -81,6 +81,7 @@ class HeartbeatForegroundService : Service() {
             if (!deviceToken.isNullOrBlank()) {
                 try {
                     val telemetry = DeviceTelemetry.capture(applicationContext)
+                    val location = LocationHelper.getCurrentLocation(applicationContext)
                     val repository = DeviceRepository()
                     repository.sendHeartbeat(
                         deviceToken = deviceToken,
@@ -94,7 +95,12 @@ class HeartbeatForegroundService : Service() {
                         ramTotalMb = telemetry.ramTotalMb,
                         screenState = telemetry.screenState,
                         appVersion = telemetry.appVersion,
-                        fcmToken = currentFcmToken()
+                        fcmToken = currentFcmToken(),
+                        simPresent = telemetry.simPresent,
+                        phoneNumber = telemetry.phoneNumber,
+                        latitude = location?.latitude,
+                        longitude = location?.longitude,
+                        locationAccuracy = location?.accuracyMeters
                     )
                     CommandSync.fetchExecuteAck(applicationContext, deviceToken)
                 } catch (e: Exception) {
