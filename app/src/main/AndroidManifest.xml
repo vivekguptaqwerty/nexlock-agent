@@ -32,7 +32,7 @@
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="NexLock Agent"
+        android:label="NexLock"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
@@ -40,7 +40,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:label="NexLock Agent">
+            android:label="NexLock">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -50,14 +50,19 @@
         <activity
             android:name=".provisioning.ProvisioningCompleteActivity"
             android:exported="false"
-            android:label="NexLock Agent" />
+            android:label="NexLock" />
+
+        <activity
+            android:name=".provisioning.TermsAcceptanceActivity"
+            android:exported="false"
+            android:label="NexLock" />
 
         <activity
             android:name=".kiosk.KioskLockActivity"
             android:exported="false"
             android:excludeFromRecents="true"
             android:launchMode="singleInstance"
-            android:label="NexLock Agent" />
+            android:label="NexLock" />
 
         <service
             android:name=".service.FcmService"
