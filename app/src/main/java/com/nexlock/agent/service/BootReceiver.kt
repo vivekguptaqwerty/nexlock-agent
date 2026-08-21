@@ -43,6 +43,7 @@ class BootReceiver : BroadcastReceiver() {
         }
 
         HeartbeatScheduler.schedule(context)
+        HeartbeatForegroundService.start(context)
         if (!PendingAckQueue.isEmpty(context)) {
             RetryWorker.scheduleOneShot(context)
         }

@@ -123,6 +123,7 @@ class CommandDispatcher(private val context: Context) {
         // affect that in-flight call.
         TokenManager(context).clear()
         HeartbeatScheduler.cancel(context)
+        HeartbeatForegroundService.stop(context)
 
         return ExecutionResult(status = "SUCCESS")
     }

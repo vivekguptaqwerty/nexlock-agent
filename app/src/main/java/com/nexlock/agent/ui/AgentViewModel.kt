@@ -14,6 +14,7 @@ import com.nexlock.agent.data.storage.TokenManager
 import com.nexlock.agent.service.CommandDispatcher
 import com.nexlock.agent.service.DeviceRestrictionPolicy
 import com.nexlock.agent.service.DeviceTelemetry
+import com.nexlock.agent.service.HeartbeatForegroundService
 import com.nexlock.agent.service.HeartbeatScheduler
 import com.nexlock.agent.service.currentFcmToken
 import kotlinx.coroutines.launch
@@ -207,5 +208,6 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun scheduleHeartbeatWorker() {
         HeartbeatScheduler.schedule(getApplication())
+        HeartbeatForegroundService.start(getApplication())
     }
 }
