@@ -45,9 +45,7 @@ class FcmService : FirebaseMessagingService() {
     }
 
     // Dealer-initiated, fully manual (no due-date tracking behind this) — a normal-importance,
-    // dismissible notification is the right fit here, unlike HeartbeatForegroundService's
-    // low-priority ongoing "Device Protection" one: this is meant to actually get the
-    // customer's attention (sound/heads-up), not just signal the app is alive in the background.
+    // dismissible notification, meant to actually get the customer's attention (sound/heads-up).
     private fun showReminderNotification(title: String, body: String) {
         val channel = NotificationChannel(
             REMINDER_CHANNEL_ID,

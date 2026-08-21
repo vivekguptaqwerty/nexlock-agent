@@ -68,13 +68,20 @@ class MainActivity : ComponentActivity() {
  * This screen is what the *customer* sees on their own financed phone — deliberately minimal
  * and free of anything technical (no server URLs, device tokens/IDs, raw command-pipeline
  * state, or a way to reset enrollment). Heartbeat and command sync still happen automatically
- * (AgentViewModel's init block + HeartbeatForegroundService/HeartbeatScheduler running in the
- * background) — there's just nothing left here for the customer to manually trigger or break.
+ * (AgentViewModel's init block + HeartbeatScheduler running in the background) — there's just
+ * nothing left here for the customer to manually trigger or break.
  *
  * The enrollment form below only appears pre-enrollment, which in practice means a dealer doing
  * a manual fallback at point of sale (the primary path is automatic, via QR-based Device Owner
  * provisioning — see ProvisioningHandshakeWorker) — a customer holding an already-provisioned
  * phone will only ever see the "protected" state.
+ *
+ * There is deliberately no in-app "set up Device Owner myself" button here: Android only allows
+ * an app to request Device Owner via ACTION_PROVISION_MANAGED_DEVICE while Setup Wizard hasn't
+ * completed yet, but sideloading this app at all requires Setup Wizard to already be done — the
+ * two conditions can never both hold, so no on-device UI can close that gap. The only working
+ * fallback for a device whose QR provisioning fails is `adb shell dpm set-device-owner`, which
+ * needs a computer and isn't something this screen can offer a button for.
  */
 @Composable
 fun AgentMainScreen(viewModel: AgentViewModel) {

@@ -175,11 +175,9 @@ object DeviceRestrictionPolicy {
     }
 
     /**
-     * POST_NOTIFICATIONS is a runtime-dangerous permission on API 33+ — without it,
-     * HeartbeatForegroundService's persistent notification silently never shows (the service
-     * itself still runs, but invisibly, defeating the point of a *visible* "this app matters"
-     * signal to the OS's process management). Device Owner apps can self-grant this instead of
-     * showing a runtime permission prompt during setup.
+     * POST_NOTIFICATIONS is a runtime-dangerous permission on API 33+ — without it, the payment
+     * reminder push (FcmService.showReminderNotification) would silently never show. Device
+     * Owner apps can self-grant this instead of showing a runtime permission prompt during setup.
      */
     private fun grantNotificationPermission(context: Context, dpm: DevicePolicyManager, admin: ComponentName) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return

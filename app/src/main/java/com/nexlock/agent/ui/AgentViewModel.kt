@@ -12,8 +12,8 @@ import com.nexlock.agent.data.api.NetworkModule
 import com.nexlock.agent.data.repository.DeviceRepository
 import com.nexlock.agent.data.storage.TokenManager
 import com.nexlock.agent.service.CommandDispatcher
+import com.nexlock.agent.service.DeviceRestrictionPolicy
 import com.nexlock.agent.service.DeviceTelemetry
-import com.nexlock.agent.service.HeartbeatForegroundService
 import com.nexlock.agent.service.HeartbeatScheduler
 import com.nexlock.agent.service.currentFcmToken
 import kotlinx.coroutines.launch
@@ -104,6 +104,15 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
                 deviceId = data.deviceId
                 deviceToken = data.deviceToken
                 isEnrolled = true
+
+                // This manual form is also the only enrollment path when Device Owner was set
+                // via `adb shell dpm set-device-owner` (bypassing real QR provisioning) — e.g.
+                // a support-recovery re-enrollment. It must apply the same baseline restrictions
+                // (factory-reset block, uninstall block, lock-task allowlist, permission
+                // self-grants) that ProvisioningHandshakeWorker applies after a QR-based
+                // handshake; skipping this left a real Device Owner device with none of that
+                // enforcement active until its next reboot.
+                DeviceRestrictionPolicy.applyBaselineRestrictions(getApplication())
 
                 scheduleHeartbeatWorker()
                 sendManualHeartbeat()
@@ -198,6 +207,5 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun scheduleHeartbeatWorker() {
         HeartbeatScheduler.schedule(getApplication())
-        HeartbeatForegroundService.start(getApplication())
     }
 }
