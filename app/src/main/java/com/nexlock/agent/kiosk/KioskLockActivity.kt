@@ -4,7 +4,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -72,8 +71,7 @@ class KioskLockActivity : ComponentActivity() {
                         dealerPhone = lockStateManager.getDealerPhone(),
                         dealerEmail = lockStateManager.getDealerEmail(),
                         supportEmail = lockStateManager.getSupportEmail(),
-                        supportPhone = lockStateManager.getSupportPhone(),
-                        onEmergencyCall = { launchEmergencyDialer() }
+                        supportPhone = lockStateManager.getSupportPhone()
                     )
                 }
             }
@@ -122,30 +120,6 @@ class KioskLockActivity : ComponentActivity() {
         }
     }
 
-    private fun launchEmergencyDialer() {
-        // Real-hardware testing found ACTION_DIAL does not work here: it opens the general
-        // Dialer app, which is a normal third-party package from this pinned app's perspective
-        // and is not in the lock-task allowlist (setLockTaskPackages only includes our own
-        // package) — the OS silently blocks the launch, with no visible error. That's a
-        // meaningfully different thing from an emergency call: ACTION_CALL directly to a
-        // number the OS recognizes as a genuine emergency number (isEmergencyNumber()) is
-        // treated specially by the platform — exempt from the CALL_PHONE runtime permission,
-        // and (per AOSP's LockTaskController) from lock-task foreground restrictions too, since
-        // devices are required to remain able to reach emergency services regardless of any
-        // kiosk/lock state. Deliberately not widening lock-task features (e.g. adding HOME) as
-        // a shortcut instead — that would let a "locked" device reach the home screen and other
-        // apps generally, which defeats the actual point of the lock.
-        try {
-            startActivity(
-                Intent(Intent.ACTION_CALL, Uri.parse("tel:$EMERGENCY_NUMBER")).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                }
-            )
-        } catch (e: Exception) {
-            Log.w(TAG, "Emergency call launch failed", e)
-        }
-    }
-
     private fun exitKiosk() {
         // stopLockTask() must be called by the Activity currently in lock-task mode itself,
         // not from a Service — this is why UNLOCK is delivered here via broadcast rather than
@@ -161,11 +135,6 @@ class KioskLockActivity : ComponentActivity() {
     companion object {
         private const val TAG = "KioskLockActivity"
         const val ACTION_UNLOCK = "com.nexlock.agent.ACTION_UNLOCK"
-        // 112 is the universal GSM emergency number, recognized as a genuine emergency number
-        // by Android's platform emergency-number database in every region NexLock operates in
-        // (including India, where 112 has been the unified emergency number since 2021) — this
-        // recognition is what triggers the OS's permission and lock-task exemptions above.
-        private const val EMERGENCY_NUMBER = "112"
     }
 }
 
@@ -176,8 +145,7 @@ private fun KioskLockedScreen(
     dealerPhone: String?,
     dealerEmail: String?,
     supportEmail: String?,
-    supportPhone: String?,
-    onEmergencyCall: () -> Unit
+    supportPhone: String?
 ) {
     val scrollState = rememberScrollState()
     val hasDealerContact = !dealerPhone.isNullOrBlank() || !dealerEmail.isNullOrBlank()
@@ -227,13 +195,6 @@ private fun KioskLockedScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
-        OutlinedButton(
-            onClick = onEmergencyCall,
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFF87171))
-        ) {
-            Text("EMERGENCY CALL")
-        }
     }
 }
 
