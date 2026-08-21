@@ -22,7 +22,10 @@ data class HandshakeRequest(
     @Json(name = "androidVersion") val androidVersion: String? = null,
     @Json(name = "sdkVersion") val sdkVersion: Int? = null,
     @Json(name = "appVersion") val appVersion: String = "1.0.0",
-    @Json(name = "timestamp") val timestamp: String? = null
+    @Json(name = "timestamp") val timestamp: String? = null,
+    // Whether the customer tapped "I Agree" on TermsAcceptanceActivity before this handshake
+    // was sent — see MdmService.performHandshake on the backend for how this is recorded.
+    @Json(name = "termsAccepted") val termsAccepted: Boolean? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -79,4 +82,21 @@ data class AckRequest(
     @Json(name = "status") val status: String,
     @Json(name = "error") val error: String? = null,
     @Json(name = "executedAt") val executedAt: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class LockInfoData(
+    @Json(name = "lockReason") val lockReason: String,
+    @Json(name = "dealerName") val dealerName: String? = null,
+    @Json(name = "dealerPhone") val dealerPhone: String? = null,
+    @Json(name = "dealerEmail") val dealerEmail: String? = null,
+    @Json(name = "supportEmail") val supportEmail: String? = null,
+    @Json(name = "supportPhone") val supportPhone: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class LegalContentData(
+    @Json(name = "title") val title: String,
+    @Json(name = "lastUpdated") val lastUpdated: String? = null,
+    @Json(name = "content") val content: String
 )

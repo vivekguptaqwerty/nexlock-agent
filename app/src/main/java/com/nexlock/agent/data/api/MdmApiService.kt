@@ -28,4 +28,16 @@ interface MdmApiService {
         @Path("id") commandId: String,
         @Body request: AckRequest
     ): Response<ApiResponse<Any>>
+
+    @GET("api/v1/mdm/devices/me/lock-info")
+    suspend fun getLockInfo(
+        @Header("Authorization") bearerToken: String
+    ): Response<ApiResponse<LockInfoData>>
+
+    // Public — fetched before the enrollment handshake, when there's no device token yet.
+    @GET("api/v1/legal/privacy-policy")
+    suspend fun getPrivacyPolicy(): Response<ApiResponse<LegalContentData>>
+
+    @GET("api/v1/legal/terms")
+    suspend fun getTerms(): Response<ApiResponse<LegalContentData>>
 }

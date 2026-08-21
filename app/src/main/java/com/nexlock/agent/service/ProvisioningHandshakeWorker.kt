@@ -51,7 +51,8 @@ class ProvisioningHandshakeWorker(
             deviceModel = Build.MODEL ?: "Unknown Model",
             manufacturer = Build.MANUFACTURER ?: "Unknown Manufacturer",
             androidVersion = Build.VERSION.RELEASE ?: "Unknown",
-            sdkVersion = Build.VERSION.SDK_INT
+            sdkVersion = Build.VERSION.SDK_INT,
+            termsAccepted = inputData.getBoolean(KEY_TERMS_ACCEPTED, false)
         )
 
         val data = handshakeResult.getOrNull() ?: return Result.retry()
@@ -88,12 +89,14 @@ class ProvisioningHandshakeWorker(
         private const val KEY_ENROLLMENT_TOKEN = "enrollment_token"
         private const val KEY_OTP = "otp"
         private const val KEY_SERVER_URL = "server_url"
+        private const val KEY_TERMS_ACCEPTED = "terms_accepted"
 
-        fun enqueue(context: Context, enrollmentToken: String?, otp: String?, serverUrl: String?) {
+        fun enqueue(context: Context, enrollmentToken: String?, otp: String?, serverUrl: String?, termsAccepted: Boolean) {
             val input = workDataOf(
                 KEY_ENROLLMENT_TOKEN to enrollmentToken,
                 KEY_OTP to otp,
-                KEY_SERVER_URL to serverUrl
+                KEY_SERVER_URL to serverUrl,
+                KEY_TERMS_ACCEPTED to termsAccepted
             )
             val request = OneTimeWorkRequestBuilder<ProvisioningHandshakeWorker>()
                 .setInputData(input)

@@ -7,7 +7,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.PersistableBundle
 import android.util.Log
-import com.nexlock.agent.provisioning.ProvisioningCompleteActivity
+import com.nexlock.agent.provisioning.TermsAcceptanceActivity
 
 /**
  * The DeviceAdminReceiver that becomes NexLock's Device Owner once a dealer's QR is scanned
@@ -32,27 +32,18 @@ class NexLockDeviceAdminReceiver : DeviceAdminReceiver() {
 
     override fun onProfileProvisioningComplete(context: Context, intent: Intent) {
         super.onProfileProvisioningComplete(context, intent)
-        Log.i(TAG, "Device Owner provisioning complete — starting automatic handshake")
+        Log.i(TAG, "Device Owner provisioning complete — showing consent screen before handshake")
 
         val extras = provisioningExtras(intent)
         val enrollmentToken = extras?.getString("enrollmentToken")
         val otp = extras?.getString("otp")
         val serverUrl = extras?.getString("serverUrl")
 
-        ProvisioningHandshakeWorker.enqueue(
-            context = context,
-            enrollmentToken = enrollmentToken,
-            otp = otp,
-            serverUrl = serverUrl
-        )
-
-        // Setup Wizard does not automatically return to this app's launcher Activity after
-        // this callback — start a lightweight "setting up your device" screen ourselves so the
-        // dealer/customer sees progress instead of being dropped on the home screen mid-setup.
-        val activityIntent = Intent(context, ProvisioningCompleteActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
-        context.startActivity(activityIntent)
+        // The handshake (and everything after it — restrictions, heartbeat) only fires once
+        // the customer taps "I Agree" here; see TermsAcceptanceActivity.onAccept. Setup Wizard
+        // does not automatically return to this app's launcher Activity after this callback,
+        // so this doubles as the "setting up your device" hand-off screen too.
+        TermsAcceptanceActivity.launchForAutoFlow(context, enrollmentToken, otp, serverUrl)
     }
 
     @Suppress("DEPRECATION")

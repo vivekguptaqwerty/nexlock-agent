@@ -1,5 +1,6 @@
 package com.nexlock.agent.data.api
 
+import com.nexlock.agent.data.model.ApiResponse
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import okhttp3.OkHttpClient
@@ -56,4 +57,18 @@ object NetworkModule {
 
     var apiService: MdmApiService = retrofit.create(MdmApiService::class.java)
         private set
+
+    // Retrofit's response.body() is always null for a non-2xx HTTP response — the real error
+    // JSON only lives in errorBody(), which callers otherwise never read, so every failed call
+    // fell back to a generic message regardless of what the backend actually said. Parses the
+    // same {success, message, ...} shape the success path uses.
+    fun <T> errorMessage(response: retrofit2.Response<ApiResponse<T>>): String? {
+        return try {
+            val raw = response.errorBody()?.string() ?: return null
+            val adapter = moshi.adapter(ApiResponse::class.java)
+            adapter.fromJson(raw)?.message
+        } catch (e: Exception) {
+            null
+        }
+    }
 }

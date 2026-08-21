@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -22,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nexlock.agent.data.storage.LockStateManager
 import com.nexlock.agent.kiosk.KioskLockActivity
+import com.nexlock.agent.provisioning.TermsAcceptanceActivity
 import com.nexlock.agent.ui.AgentViewModel
 
 class MainActivity : ComponentActivity() {
@@ -56,6 +58,9 @@ class MainActivity : ComponentActivity() {
         if (LockStateManager(this).isLocked()) {
             redirectToKioskLock()
         }
+        // Picks up acceptance recorded by TermsAcceptanceActivity, which this Activity may have
+        // just launched and returned from.
+        viewModel.refreshTermsAcceptedStatus()
     }
 
     private fun redirectToKioskLock() {
@@ -86,6 +91,17 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun AgentMainScreen(viewModel: AgentViewModel) {
     val scrollState = rememberScrollState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val needsTermsGate = !viewModel.isEnrolled && !viewModel.isTermsAccepted
+
+    // Auto-launches once per composition when the gate is needed — MainActivity.onResume()
+    // re-checks isTermsAccepted when this Activity resumes after TermsAcceptanceActivity
+    // finishes, which recomposes this away from the gate and shows EnrollmentCard instead.
+    LaunchedEffect(needsTermsGate) {
+        if (needsTermsGate) {
+            TermsAcceptanceActivity.launchForManualFlow(context)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -105,10 +121,10 @@ fun AgentMainScreen(viewModel: AgentViewModel) {
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        if (!viewModel.isEnrolled) {
-            EnrollmentCard(viewModel)
-        } else {
-            ProtectedStatusCard(lastSyncedAt = viewModel.lastHeartbeatTime)
+        when {
+            needsTermsGate -> CircularProgressIndicator(color = Color(0xFF38BDF8))
+            !viewModel.isEnrolled -> EnrollmentCard(viewModel)
+            else -> ProtectedStatusCard(lastSyncedAt = viewModel.lastHeartbeatTime)
         }
     }
 }

@@ -13,14 +13,19 @@ import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nexlock.agent.data.storage.LockStateManager
 
 /**
  * The real kiosk lock screen — pinned via startLockTask() once the app is Device Owner, unlike
@@ -57,10 +62,19 @@ class KioskLockActivity : ComponentActivity() {
             }
         })
 
+        val lockStateManager = LockStateManager(this)
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0F172A)) {
-                    KioskLockedScreen(onEmergencyCall = { launchEmergencyDialer() })
+                    KioskLockedScreen(
+                        reason = lockStateManager.getLockReason(),
+                        dealerName = lockStateManager.getDealerName(),
+                        dealerPhone = lockStateManager.getDealerPhone(),
+                        dealerEmail = lockStateManager.getDealerEmail(),
+                        supportEmail = lockStateManager.getSupportEmail(),
+                        supportPhone = lockStateManager.getSupportPhone(),
+                        onEmergencyCall = { launchEmergencyDialer() }
+                    )
                 }
             }
         }
@@ -156,9 +170,24 @@ class KioskLockActivity : ComponentActivity() {
 }
 
 @Composable
-private fun KioskLockedScreen(onEmergencyCall: () -> Unit) {
+private fun KioskLockedScreen(
+    reason: String?,
+    dealerName: String?,
+    dealerPhone: String?,
+    dealerEmail: String?,
+    supportEmail: String?,
+    supportPhone: String?,
+    onEmergencyCall: () -> Unit
+) {
+    val scrollState = rememberScrollState()
+    val hasDealerContact = !dealerPhone.isNullOrBlank() || !dealerEmail.isNullOrBlank()
+    val hasSupportContact = !supportPhone.isNullOrBlank() || !supportEmail.isNullOrBlank()
+
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp)
+            .verticalScroll(scrollState),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -170,16 +199,34 @@ private fun KioskLockedScreen(onEmergencyCall: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = "This device has been locked by NexLock due to an overdue payment.",
+            text = reason ?: "This device has been locked due to an overdue EMI payment.",
             color = Color(0xFF94A3B8),
-            fontSize = 14.sp
+            fontSize = 14.sp,
+            textAlign = TextAlign.Center
         )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = "Contact your dealer to resume payment and unlock this device.",
-            color = Color(0xFF94A3B8),
-            fontSize = 14.sp
-        )
+
+        if (hasDealerContact) {
+            Spacer(modifier = Modifier.height(24.dp))
+            InfoCard(title = dealerName ?: "Your Dealer") {
+                dealerPhone?.takeIf { it.isNotBlank() }?.let { ContactRow(label = "Phone", value = it) }
+                dealerEmail?.takeIf { it.isNotBlank() }?.let { ContactRow(label = "Email", value = it) }
+            }
+        }
+
+        if (hasSupportContact) {
+            Spacer(modifier = Modifier.height(12.dp))
+            InfoCard(title = "Payment already done? Dealer not responding?") {
+                Text(
+                    text = "Contact NexLock support directly:",
+                    color = Color(0xFF94A3B8),
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                supportPhone?.takeIf { it.isNotBlank() }?.let { ContactRow(label = "Phone", value = it) }
+                supportEmail?.takeIf { it.isNotBlank() }?.let { ContactRow(label = "Email", value = it) }
+            }
+        }
+
         Spacer(modifier = Modifier.height(32.dp))
         OutlinedButton(
             onClick = onEmergencyCall,
@@ -187,5 +234,36 @@ private fun KioskLockedScreen(onEmergencyCall: () -> Unit) {
         ) {
             Text("EMERGENCY CALL")
         }
+    }
+}
+
+@Composable
+private fun InfoCard(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = title,
+                color = Color.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            content()
+        }
+    }
+}
+
+@Composable
+private fun ContactRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(text = label, color = Color(0xFF64748B), fontSize = 12.sp)
+        Text(text = value, color = Color(0xFFE2E8F0), fontSize = 12.sp, fontWeight = FontWeight.Bold)
     }
 }

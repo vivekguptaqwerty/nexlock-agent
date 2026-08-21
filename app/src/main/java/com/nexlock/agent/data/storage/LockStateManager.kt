@@ -43,8 +43,42 @@ class LockStateManager(context: Context) {
 
     fun lockedAt(): Long = prefs.getLong(KEY_LOCKED_AT, 0L)
 
+    // Cached at lock time (see CommandDispatcher.executeLockCommand) so KioskLockActivity can
+    // render the reason and contact details without a live network call every time it shows —
+    // including on the boot-reassert path, and if the device is offline while locked.
+    fun saveLockInfo(
+        reason: String?,
+        dealerName: String?,
+        dealerPhone: String?,
+        dealerEmail: String?,
+        supportEmail: String?,
+        supportPhone: String?
+    ) {
+        prefs.edit()
+            .putString(KEY_LOCK_REASON, reason)
+            .putString(KEY_DEALER_NAME, dealerName)
+            .putString(KEY_DEALER_PHONE, dealerPhone)
+            .putString(KEY_DEALER_EMAIL, dealerEmail)
+            .putString(KEY_SUPPORT_EMAIL, supportEmail)
+            .putString(KEY_SUPPORT_PHONE, supportPhone)
+            .apply()
+    }
+
+    fun getLockReason(): String? = prefs.getString(KEY_LOCK_REASON, null)
+    fun getDealerName(): String? = prefs.getString(KEY_DEALER_NAME, null)
+    fun getDealerPhone(): String? = prefs.getString(KEY_DEALER_PHONE, null)
+    fun getDealerEmail(): String? = prefs.getString(KEY_DEALER_EMAIL, null)
+    fun getSupportEmail(): String? = prefs.getString(KEY_SUPPORT_EMAIL, null)
+    fun getSupportPhone(): String? = prefs.getString(KEY_SUPPORT_PHONE, null)
+
     companion object {
         private const val KEY_IS_LOCKED = "key_is_locked"
         private const val KEY_LOCKED_AT = "key_locked_at"
+        private const val KEY_LOCK_REASON = "key_lock_reason"
+        private const val KEY_DEALER_NAME = "key_dealer_name"
+        private const val KEY_DEALER_PHONE = "key_dealer_phone"
+        private const val KEY_DEALER_EMAIL = "key_dealer_email"
+        private const val KEY_SUPPORT_EMAIL = "key_support_email"
+        private const val KEY_SUPPORT_PHONE = "key_support_phone"
     }
 }
