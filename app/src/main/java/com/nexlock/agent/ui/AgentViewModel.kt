@@ -37,6 +37,16 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
     var isEnrolling by mutableStateOf(false)
     var enrollmentError by mutableStateOf<String?>(null)
     var isEnrolled by mutableStateOf(tokenManager.isEnrolled())
+
+    // Local consent gate for the manual (non-QR) enrollment path — see
+    // TermsAcceptanceActivity.launchForManualFlow. Re-checked in MainActivity.onResume() since
+    // that Activity finishes back here after the customer accepts.
+    var isTermsAccepted by mutableStateOf(tokenManager.isTermsAccepted())
+
+    fun refreshTermsAcceptedStatus() {
+        isTermsAccepted = tokenManager.isTermsAccepted()
+    }
+
     var deviceId by mutableStateOf(tokenManager.getDeviceId() ?: "")
     var deviceToken by mutableStateOf(tokenManager.getDeviceToken() ?: "")
     
@@ -90,7 +100,8 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
                 deviceModel = Build.MODEL ?: "Unknown Model",
                 manufacturer = Build.MANUFACTURER ?: "Unknown Manufacturer",
                 androidVersion = Build.VERSION.RELEASE ?: "Unknown",
-                sdkVersion = Build.VERSION.SDK_INT
+                sdkVersion = Build.VERSION.SDK_INT,
+                termsAccepted = tokenManager.isTermsAccepted()
             )
 
             isEnrolling = false

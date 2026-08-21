@@ -49,6 +49,17 @@ class TokenManager(context: Context) {
 
     fun isEnrolled(): Boolean = prefs.getBoolean(KEY_IS_ENROLLED, false)
 
+    // Set locally the moment the customer taps "I Agree" on TermsAcceptanceActivity (manual
+    // flow — see AgentViewModel), read back before performHandshake() sends termsAccepted to
+    // the backend. The QR flow doesn't need this: it passes termsAccepted straight through
+    // ProvisioningHandshakeWorker's enqueue() extras instead, since there's no gap between
+    // acceptance and the handshake call in that flow.
+    fun setTermsAccepted(accepted: Boolean) {
+        prefs.edit().putBoolean(KEY_TERMS_ACCEPTED, accepted).apply()
+    }
+
+    fun isTermsAccepted(): Boolean = prefs.getBoolean(KEY_TERMS_ACCEPTED, false)
+
     fun clear() {
         prefs.edit().clear().apply()
     }
@@ -59,5 +70,6 @@ class TokenManager(context: Context) {
         private const val KEY_LOAN_ID = "key_loan_id"
         private const val KEY_HEARTBEAT_INTERVAL = "key_heartbeat_interval"
         private const val KEY_IS_ENROLLED = "key_is_enrolled"
+        private const val KEY_TERMS_ACCEPTED = "key_terms_accepted"
     }
 }

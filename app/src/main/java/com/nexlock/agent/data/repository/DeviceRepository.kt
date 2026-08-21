@@ -12,7 +12,8 @@ class DeviceRepository {
         deviceModel: String,
         manufacturer: String,
         androidVersion: String,
-        sdkVersion: Int
+        sdkVersion: Int,
+        termsAccepted: Boolean = false
     ): Result<HandshakeData> {
         return try {
             val req = HandshakeRequest(
@@ -23,14 +24,15 @@ class DeviceRepository {
                 manufacturer = manufacturer,
                 androidVersion = androidVersion,
                 sdkVersion = sdkVersion,
-                appVersion = "1.0.0"
+                appVersion = "1.0.0",
+                termsAccepted = termsAccepted
             )
             val response = NetworkModule.apiService.performHandshake(req)
             if (response.isSuccessful && response.body()?.success == true) {
                 val data = response.body()!!.data!!
                 Result.success(data)
             } else {
-                Result.failure(Exception(response.body()?.message ?: "Handshake rejected by server"))
+                Result.failure(Exception(NetworkModule.errorMessage(response) ?: "Handshake rejected by server"))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -79,7 +81,7 @@ class DeviceRepository {
             if (response.isSuccessful && response.body()?.success == true) {
                 Result.success(response.body()!!.data!!)
             } else {
-                Result.failure(Exception(response.body()?.message ?: "Heartbeat rejected"))
+                Result.failure(Exception(NetworkModule.errorMessage(response) ?: "Heartbeat rejected"))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -92,7 +94,7 @@ class DeviceRepository {
             if (response.isSuccessful && response.body()?.success == true) {
                 Result.success(response.body()?.data ?: emptyList())
             } else {
-                Result.failure(Exception(response.body()?.message ?: "Failed to fetch pending commands"))
+                Result.failure(Exception(NetworkModule.errorMessage(response) ?: "Failed to fetch pending commands"))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -111,7 +113,46 @@ class DeviceRepository {
             if (response.isSuccessful && response.body()?.success == true) {
                 Result.success(true)
             } else {
-                Result.failure(Exception(response.body()?.message ?: "Failed to send command ACK"))
+                Result.failure(Exception(NetworkModule.errorMessage(response) ?: "Failed to send command ACK"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getLockInfo(deviceToken: String): Result<LockInfoData> {
+        return try {
+            val response = NetworkModule.apiService.getLockInfo("Bearer $deviceToken")
+            if (response.isSuccessful && response.body()?.success == true) {
+                Result.success(response.body()!!.data!!)
+            } else {
+                Result.failure(Exception(NetworkModule.errorMessage(response) ?: "Failed to fetch lock info"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getPrivacyPolicy(): Result<LegalContentData> {
+        return try {
+            val response = NetworkModule.apiService.getPrivacyPolicy()
+            if (response.isSuccessful && response.body()?.success == true) {
+                Result.success(response.body()!!.data!!)
+            } else {
+                Result.failure(Exception(NetworkModule.errorMessage(response) ?: "Failed to fetch privacy policy"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getTerms(): Result<LegalContentData> {
+        return try {
+            val response = NetworkModule.apiService.getTerms()
+            if (response.isSuccessful && response.body()?.success == true) {
+                Result.success(response.body()!!.data!!)
+            } else {
+                Result.failure(Exception(NetworkModule.errorMessage(response) ?: "Failed to fetch terms"))
             }
         } catch (e: Exception) {
             Result.failure(e)

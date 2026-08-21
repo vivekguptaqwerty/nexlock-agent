@@ -4,6 +4,7 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import com.nexlock.agent.data.repository.DeviceRepository
 import com.nexlock.agent.data.storage.LockStateManager
 import com.nexlock.agent.data.storage.TokenManager
 import com.nexlock.agent.kiosk.KioskLockActivity
@@ -19,7 +20,7 @@ class CommandDispatcher(private val context: Context) {
         val error: String? = null
     )
 
-    fun executeCommand(commandType: String): ExecutionResult {
+    suspend fun executeCommand(commandType: String): ExecutionResult {
         return when (commandType.uppercase()) {
             "LOCK" -> executeLockCommand()
             "UNLOCK" -> executeUnlockCommand()
@@ -33,7 +34,7 @@ class CommandDispatcher(private val context: Context) {
     // the same honest FAILED/NOT_SUPPORTED status on a non-provisioned test build that it always
     // has — the command pipeline (queue -> poll -> execute -> ack -> history) stays verifiable
     // end-to-end either way, it just now actually succeeds once Device Owner is real.
-    private fun executeLockCommand(): ExecutionResult {
+    private suspend fun executeLockCommand(): ExecutionResult {
         val dpmLocal = dpm
             ?: return ExecutionResult(
                 status = "NOT_SUPPORTED",
@@ -47,6 +48,7 @@ class CommandDispatcher(private val context: Context) {
         }
         return try {
             lockStateManager.setLocked(true)
+            fetchAndCacheLockInfo()
             try {
                 dpmLocal.setStatusBarDisabled(admin, true)
             } catch (e: Exception) {
@@ -65,6 +67,23 @@ class CommandDispatcher(private val context: Context) {
         } catch (e: Exception) {
             lockStateManager.setLocked(false)
             ExecutionResult(status = "FAILED", error = e.localizedMessage ?: "Failed to execute lock command")
+        }
+    }
+
+    // Best-effort — the kiosk screen falls back to a bundled generic reason (no dealer/support
+    // contact) if this fails, rather than blocking the lock itself on a network call succeeding.
+    private suspend fun fetchAndCacheLockInfo() {
+        val deviceToken = TokenManager(context).getDeviceToken() ?: return
+        val result = DeviceRepository().getLockInfo(deviceToken)
+        result.getOrNull()?.let { info ->
+            lockStateManager.saveLockInfo(
+                reason = info.lockReason,
+                dealerName = info.dealerName,
+                dealerPhone = info.dealerPhone,
+                dealerEmail = info.dealerEmail,
+                supportEmail = info.supportEmail,
+                supportPhone = info.supportPhone
+            )
         }
     }
 
