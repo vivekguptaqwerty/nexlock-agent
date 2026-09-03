@@ -21,6 +21,14 @@ object DeviceRestrictionPolicy {
 
     private const val TAG = "DeviceRestrictionPolicy"
 
+    // The account required to pass Factory Reset Protection after a recovery-mode wipe — see
+    // activateFactoryResetProtection. Deliberately just the email, never a password: the app
+    // never signs into this account itself, it only tells Android which account FRP should
+    // accept. The password is an operational credential typed by a human (dealer/admin) into
+    // the phone's own FRP screen during a real recovery — it has no reason to exist in this
+    // codebase and must never be added here.
+    private const val FRP_RECOVERY_ACCOUNT = "nexlock974@gmail.com"
+
     private val TARGET_RESTRICTIONS = listOf(
         UserManager.DISALLOW_FACTORY_RESET,
         UserManager.DISALLOW_DEBUGGING_FEATURES,
@@ -91,12 +99,19 @@ object DeviceRestrictionPolicy {
      * but Device Owner provisioning requires the opposite (zero accounts on the device), so FRP
      * was never actually armed on these phones, and a recovery-mode wipe left them as clean,
      * unlocked phones with zero protection. setFactoryResetProtectionPolicy (API 30+) lets a
-     * Device Owner arm FRP itself, independent of any Google account, so a wiped device still
-     * comes up requiring re-provisioning authorization instead of being immediately usable.
+     * Device Owner arm FRP itself, requiring FRP_RECOVERY_ACCOUNT specifically (not an empty
+     * enterprise policy — deliberately the well-documented, universally-implemented consumer FRP
+     * path: "sign in with a Google account previously used on this device") so a wiped device
+     * comes up locked to that one NexLock-controlled account instead of being immediately usable.
+     * A dealer recovering a legitimately-reset device signs into FRP_RECOVERY_ACCOUNT on that
+     * screen, then re-provisions Device Owner normally from there (QR or the Activator).
      *
-     * NOTE: this needs a real recovery-mode wipe on real hardware to confirm the post-wipe
-     * behavior actually matches this understanding — the accounts list / exact resulting
-     * first-boot flow isn't something to trust from documentation alone.
+     * NOTE: not yet confirmed on real hardware — specifically (1) that a recovery-mode wipe
+     * actually triggers this screen requiring FRP_RECOVERY_ACCOUNT and rejects any other account,
+     * and (2) that completing that Google sign-in doesn't itself block the subsequent Device
+     * Owner re-provisioning step (which normally requires zero accounts on the device — unverified
+     * whether Setup Wizard's own FRP-mandated sign-in is exempt from that check). Do not roll this
+     * past a disposable test device until both are confirmed.
      */
     private fun activateFactoryResetProtection(dpm: DevicePolicyManager, admin: ComponentName) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
@@ -105,11 +120,11 @@ object DeviceRestrictionPolicy {
         }
         try {
             val policy = android.app.admin.FactoryResetProtectionPolicy.Builder()
-                .setFactoryResetProtectionAccounts(emptyList())
+                .setFactoryResetProtectionAccounts(listOf(FRP_RECOVERY_ACCOUNT))
                 .setFactoryResetProtectionEnabled(true)
                 .build()
             dpm.setFactoryResetProtectionPolicy(admin, policy)
-            Log.i(TAG, "setFactoryResetProtectionPolicy applied (enabled=true, no account required)")
+            Log.i(TAG, "setFactoryResetProtectionPolicy applied (enabled=true, account=$FRP_RECOVERY_ACCOUNT)")
         } catch (e: Exception) {
             Log.e(TAG, "setFactoryResetProtectionPolicy failed", e)
         }
