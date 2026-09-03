@@ -75,8 +75,44 @@ object DeviceRestrictionPolicy {
         applyUserControlLock(context, dpm, admin)
         grantNotificationPermission(context, dpm, admin)
         grantLocationAndPhonePermissions(context, dpm, admin)
+        activateFactoryResetProtection(dpm, admin)
 
         verifyAppliedRestrictions(context, dpm, admin)
+    }
+
+    /**
+     * DISALLOW_FACTORY_RESET (above) only blocks the in-Settings "Erase all data" UI — it has no
+     * effect on a recovery-mode wipe triggered by the hardware button combo (Volume Up + Power on
+     * most OEMs), which happens in the bootloader before Android, and therefore before this app,
+     * is even running. Nothing running as an Android app can intercept that.
+     *
+     * What IS reachable: what happens to the device AFTER that wipe completes. Normal Factory
+     * Reset Protection (FRP) is keyed off whether a Google account was present before the reset —
+     * but Device Owner provisioning requires the opposite (zero accounts on the device), so FRP
+     * was never actually armed on these phones, and a recovery-mode wipe left them as clean,
+     * unlocked phones with zero protection. setFactoryResetProtectionPolicy (API 30+) lets a
+     * Device Owner arm FRP itself, independent of any Google account, so a wiped device still
+     * comes up requiring re-provisioning authorization instead of being immediately usable.
+     *
+     * NOTE: this needs a real recovery-mode wipe on real hardware to confirm the post-wipe
+     * behavior actually matches this understanding — the accounts list / exact resulting
+     * first-boot flow isn't something to trust from documentation alone.
+     */
+    private fun activateFactoryResetProtection(dpm: DevicePolicyManager, admin: ComponentName) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            Log.w(TAG, "setFactoryResetProtectionPolicy unavailable below API 30 (this device: ${Build.VERSION.SDK_INT}) — skipping")
+            return
+        }
+        try {
+            val policy = android.app.admin.FactoryResetProtectionPolicy.Builder()
+                .setFactoryResetProtectionAccounts(emptyList())
+                .setFactoryResetProtectionEnabled(true)
+                .build()
+            dpm.setFactoryResetProtectionPolicy(admin, policy)
+            Log.i(TAG, "setFactoryResetProtectionPolicy applied (enabled=true, no account required)")
+        } catch (e: Exception) {
+            Log.e(TAG, "setFactoryResetProtectionPolicy failed", e)
+        }
     }
 
     /**
@@ -130,6 +166,7 @@ object DeviceRestrictionPolicy {
         }
 
         clearUserControlLock(dpm, admin)
+        clearFactoryResetProtection(dpm, admin)
 
         return try {
             dpm.clearDeviceOwnerApp(context.packageName)
@@ -171,6 +208,21 @@ object DeviceRestrictionPolicy {
             Log.i(TAG, "cleared setUserControlDisabledPackages")
         } catch (e: Exception) {
             Log.e(TAG, "clearing setUserControlDisabledPackages failed", e)
+        }
+    }
+
+    /**
+     * Must run before clearDeviceOwnerApp() below, same reasoning as clearUserControlLock — once
+     * Device Owner is cleared this app has no privilege left to touch FRP at all, and a fully
+     * paid-off customer's own phone must not stay locked behind a policy nobody can lift anymore.
+     */
+    private fun clearFactoryResetProtection(dpm: DevicePolicyManager, admin: ComponentName) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        try {
+            dpm.setFactoryResetProtectionPolicy(admin, null)
+            Log.i(TAG, "cleared setFactoryResetProtectionPolicy")
+        } catch (e: Exception) {
+            Log.e(TAG, "clearing setFactoryResetProtectionPolicy failed", e)
         }
     }
 
@@ -294,5 +346,19 @@ object DeviceRestrictionPolicy {
             emptyList()
         }
         Log.i(TAG, "VERIFIED lock task allowlist: $lockTaskPackages")
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val frpPolicy = try {
+                dpm.getFactoryResetProtectionPolicy(admin)
+            } catch (e: Exception) {
+                Log.e(TAG, "getFactoryResetProtectionPolicy() readback threw", e)
+                null
+            }
+            if (frpPolicy != null) {
+                Log.i(TAG, "VERIFIED FactoryResetProtectionPolicy: enabled=${frpPolicy.isFactoryResetProtectionEnabled}, accounts=${frpPolicy.factoryResetProtectionAccounts}")
+            } else {
+                Log.e(TAG, "NOT ACTIVE: getFactoryResetProtectionPolicy returned null — FRP is not armed on this device")
+            }
+        }
     }
 }
