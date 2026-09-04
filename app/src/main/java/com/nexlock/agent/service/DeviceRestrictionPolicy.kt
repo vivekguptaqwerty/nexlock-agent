@@ -27,7 +27,11 @@ object DeviceRestrictionPolicy {
     // accept. The password is an operational credential typed by a human (dealer/admin) into
     // the phone's own FRP screen during a real recovery — it has no reason to exist in this
     // codebase and must never be added here.
-    private const val FRP_RECOVERY_ACCOUNT = "nexlock974@gmail.com"
+    // TEST BUILD ONLY (v1.0.16) — swapped to a genuinely aged (7-8 year old) personal account
+    // specifically to isolate whether v1.0.14's failure was really about account age/trust, per
+    // the theory in activateFactoryResetProtection's doc comment below. Do not treat this as the
+    // production account choice either way until this test's result is in.
+    private const val FRP_RECOVERY_ACCOUNT = "vivekg3216@gmail.com"
 
     private val TARGET_RESTRICTIONS = listOf(
         UserManager.DISALLOW_FACTORY_RESET,
@@ -83,16 +87,12 @@ object DeviceRestrictionPolicy {
         applyUserControlLock(context, dpm, admin)
         grantNotificationPermission(context, dpm, admin)
         grantLocationAndPhonePermissions(context, dpm, admin)
-        // activateFactoryResetProtection(dpm, admin) — DISABLED as of v1.0.15. Live-tested on a
-        // real device (2026-09-04): FRP_RECOVERY_ACCOUNT's credentials were 100% correct (verified
-        // working via a normal browser sign-in at the same time) but were still silently rejected
-        // on the FRP verification screen itself — Google's fraud heuristics on that specific
-        // screen reject accounts without enough real usage history, independent of whether the
-        // password is right. The device was left stuck with no fast way back. Do not re-enable
-        // this until FRP_RECOVERY_ACCOUNT has been aged with real usage over time (or the OEM
-        // partnership route replaces this approach entirely) AND it's been re-verified end-to-end
-        // on a real device that recovery actually succeeds. Shipping this against real customer
-        // devices in its current state risks the same stuck outcome on a paid-for phone.
+        // RE-ENABLED for the v1.0.16 TEST BUILD ONLY, with FRP_RECOVERY_ACCOUNT swapped to an
+        // aged personal account, specifically to test whether account age was really the cause
+        // of v1.0.14's failure. This build must not be wired to production (AGENT_APK_DOWNLOAD_URL)
+        // — see the disabled state in v1.0.15 and the failure notes on activateFactoryResetProtection
+        // below. Re-disable (comment this call back out) if this test also fails.
+        activateFactoryResetProtection(dpm, admin)
 
         verifyAppliedRestrictions(context, dpm, admin)
     }
