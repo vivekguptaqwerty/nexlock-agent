@@ -385,4 +385,26 @@ object DeviceRestrictionPolicy {
             }
         }
     }
+
+    /**
+     * On-screen equivalent of the logcat verification above, for devices where
+     * DISALLOW_DEBUGGING_FEATURES (applied as part of this same baseline) blocks adb access —
+     * TEST BUILD diagnostic only, not meant to stay in a production-facing UI long-term.
+     */
+    fun getFrpDiagnosticText(context: Context): String {
+        val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as? DevicePolicyManager
+            ?: return "FRP: DevicePolicyManager unavailable"
+        val admin = ComponentName(context, NexLockDeviceAdminReceiver::class.java)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return "FRP: unavailable below API 30"
+        return try {
+            val policy = dpm.getFactoryResetProtectionPolicy(admin)
+            if (policy != null) {
+                "FRP: ARMED, enabled=${policy.isFactoryResetProtectionEnabled}, accounts=${policy.factoryResetProtectionAccounts}"
+            } else {
+                "FRP: NOT ARMED (policy is null)"
+            }
+        } catch (e: Exception) {
+            "FRP: readback threw — ${e.message}"
+        }
+    }
 }
