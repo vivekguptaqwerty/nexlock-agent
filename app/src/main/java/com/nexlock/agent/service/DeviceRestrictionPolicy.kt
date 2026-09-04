@@ -83,7 +83,16 @@ object DeviceRestrictionPolicy {
         applyUserControlLock(context, dpm, admin)
         grantNotificationPermission(context, dpm, admin)
         grantLocationAndPhonePermissions(context, dpm, admin)
-        activateFactoryResetProtection(dpm, admin)
+        // activateFactoryResetProtection(dpm, admin) — DISABLED as of v1.0.15. Live-tested on a
+        // real device (2026-09-04): FRP_RECOVERY_ACCOUNT's credentials were 100% correct (verified
+        // working via a normal browser sign-in at the same time) but were still silently rejected
+        // on the FRP verification screen itself — Google's fraud heuristics on that specific
+        // screen reject accounts without enough real usage history, independent of whether the
+        // password is right. The device was left stuck with no fast way back. Do not re-enable
+        // this until FRP_RECOVERY_ACCOUNT has been aged with real usage over time (or the OEM
+        // partnership route replaces this approach entirely) AND it's been re-verified end-to-end
+        // on a real device that recovery actually succeeds. Shipping this against real customer
+        // devices in its current state risks the same stuck outcome on a paid-for phone.
 
         verifyAppliedRestrictions(context, dpm, admin)
     }
