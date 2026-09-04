@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -24,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import com.nexlock.agent.data.storage.LockStateManager
 import com.nexlock.agent.kiosk.KioskLockActivity
 import com.nexlock.agent.provisioning.TermsAcceptanceActivity
+import com.nexlock.agent.service.DeviceRestrictionPolicy
 import com.nexlock.agent.ui.AgentViewModel
 
 class MainActivity : ComponentActivity() {
@@ -179,6 +181,17 @@ private fun ProtectedStatusCard(lastSyncedAt: String) {
                     fontSize = 12.sp
                 )
             }
+
+            // TEST BUILD diagnostic only — readable on-screen so FRP status can be confirmed
+            // even on devices where DISALLOW_DEBUGGING_FEATURES blocks adb access post-enrollment.
+            val context = LocalContext.current
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = DeviceRestrictionPolicy.getFrpDiagnosticText(context),
+                color = Color(0xFFFACC15),
+                fontSize = 11.sp,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
