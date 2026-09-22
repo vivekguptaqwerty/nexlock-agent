@@ -17,3 +17,8 @@
 local.properties
 *.jks
 hs_err_pid*.log
+
+# Never commit signing credentials or the keystore itself.
+local.properties
+*.jks
+*.keystore
