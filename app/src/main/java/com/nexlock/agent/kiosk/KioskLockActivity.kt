@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -20,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -178,6 +180,7 @@ private fun KioskLockedScreen(
             InfoCard(title = dealerName ?: "Your Dealer") {
                 dealerPhone?.takeIf { it.isNotBlank() }?.let { ContactRow(label = "Phone", value = it) }
                 dealerEmail?.takeIf { it.isNotBlank() }?.let { ContactRow(label = "Email", value = it) }
+                dealerPhone?.takeIf { it.isNotBlank() }?.let { CallDealerButton(phone = it) }
             }
         }
 
@@ -215,6 +218,36 @@ private fun InfoCard(title: String, content: @Composable ColumnScope.() -> Unit)
             )
             content()
         }
+    }
+}
+
+/**
+ * Opens the dialer pre-filled with the dealer's number — deliberately ACTION_DIAL, not
+ * ACTION_CALL, so it never needs the CALL_PHONE permission and the customer places the call
+ * themselves with one more tap. Only reachable at all because CommandDispatcher.executeLockCommand
+ * adds the device's default dialer to the lock-task allowlist on every LOCK — without that this
+ * Intent would just be silently blocked by the OS like any other non-whitelisted app while pinned.
+ * Scoped to the dealer's number only (not a general-purpose dialer button) — the customer can dial
+ * a different number from the dialer screen this opens, but the button itself doesn't invite that.
+ */
+@Composable
+private fun CallDealerButton(phone: String) {
+    val context = LocalContext.current
+    Button(
+        onClick = {
+            try {
+                val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone")).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                Log.e("KioskLockActivity", "Failed to launch dialer for dealer call", e)
+            }
+        },
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF22C55E))
+    ) {
+        Text(text = "Call Dealer", fontWeight = FontWeight.Bold)
     }
 }
 

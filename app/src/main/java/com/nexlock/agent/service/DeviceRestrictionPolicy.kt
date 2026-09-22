@@ -70,11 +70,7 @@ object DeviceRestrictionPolicy {
             Log.e(TAG, "setUninstallBlocked failed", e)
         }
 
-        try {
-            dpm.setLockTaskPackages(admin, arrayOf(context.packageName))
-        } catch (e: Exception) {
-            Log.e(TAG, "setLockTaskPackages failed", e)
-        }
+        refreshLockTaskPackages(context, dpm, admin)
 
         try {
             // Minimal starting baseline (Open Decision #4 in the Phase 3 plan) — only
@@ -318,6 +314,45 @@ object DeviceRestrictionPolicy {
             } catch (e: Exception) {
                 Log.e(TAG, "setPermissionGrantState(READ_PHONE_NUMBERS) failed", e)
             }
+        }
+    }
+
+    /**
+     * The lock-task allowlist controls which packages the OS permits while the kiosk screen is
+     * pinned (startLockTask) — everything not in this list is unreachable, including Settings and
+     * Home. Widened beyond just this app's own package to include the device's current default
+     * dialer, so KioskLockActivity's "Call Dealer" button can actually launch it while pinned;
+     * without this the dialer Intent would simply be blocked by the OS like any other app.
+     *
+     * Called both from applyBaselineRestrictions() (enrollment) and from
+     * CommandDispatcher.executeLockCommand() (every LOCK) — the latter matters because this is a
+     * plain replace-the-whole-list call, so an already-enrolled device only picks up a newly
+     * widened allowlist once it locks again, not automatically from this code shipping.
+     *
+     * Best-effort: if the default dialer can't be determined (no dialer role holder, or the API
+     * throws), the allowlist falls back to just this app's own package — the customer loses the
+     * in-lockscreen call button but the lock itself is unaffected either way.
+     */
+    fun refreshLockTaskPackages(context: Context, dpm: DevicePolicyManager, admin: ComponentName) {
+        val dialerPackage = try {
+            val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
+            telecomManager?.defaultDialerPackage
+        } catch (e: Exception) {
+            Log.e(TAG, "getDefaultDialerPackage failed", e)
+            null
+        }
+
+        val allowedPackages = if (dialerPackage.isNullOrBlank()) {
+            arrayOf(context.packageName)
+        } else {
+            arrayOf(context.packageName, dialerPackage)
+        }
+
+        try {
+            dpm.setLockTaskPackages(admin, allowedPackages)
+            Log.i(TAG, "setLockTaskPackages applied: ${allowedPackages.toList()}")
+        } catch (e: Exception) {
+            Log.e(TAG, "setLockTaskPackages failed", e)
         }
     }
 

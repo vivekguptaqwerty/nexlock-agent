@@ -25,6 +25,14 @@
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
 
+    <!-- Package-visibility declaration (API 30+) for KioskLockActivity's "Call Dealer" button,
+         which opens the dialer via an implicit ACTION_DIAL Intent. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"

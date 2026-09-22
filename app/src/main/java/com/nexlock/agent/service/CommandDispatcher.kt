@@ -56,6 +56,10 @@ class CommandDispatcher(private val context: Context) {
                 // setStatusBarDisabled is defense in depth and deprecated on API 30+.
             }
             dpmLocal.lockNow()
+            // Refreshed here (not just once at enrollment) so a device enrolled before the
+            // dealer-call-button shipped still picks up the widened lock-task allowlist the
+            // next time it locks — see refreshLockTaskPackages's own doc comment.
+            DeviceRestrictionPolicy.refreshLockTaskPackages(context, dpmLocal, admin)
             launchKioskLockActivity()
             ExecutionResult(status = "SUCCESS")
         } catch (se: SecurityException) {
