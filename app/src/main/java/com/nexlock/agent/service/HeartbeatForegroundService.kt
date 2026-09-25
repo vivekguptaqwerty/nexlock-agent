@@ -46,10 +46,14 @@ class HeartbeatForegroundService : Service() {
     private val supervisorJob = SupervisorJob()
     private val scope = CoroutineScope(supervisorJob)
     private var loopJob: Job? = null
+    private var wifiStateEnforcer: WifiStateEnforcer? = null
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        // This service's own lifecycle is what keeps the receiver alive — see
+        // WifiStateEnforcer's doc comment for why it can't just be manifest-declared.
+        wifiStateEnforcer = WifiStateEnforcer.register(applicationContext)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -68,6 +72,13 @@ class HeartbeatForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        wifiStateEnforcer?.let {
+            try {
+                unregisterReceiver(it)
+            } catch (e: Exception) {
+                // Non-fatal — already unregistered or never successfully registered.
+            }
+        }
         supervisorJob.cancel()
         super.onDestroy()
     }
@@ -77,6 +88,11 @@ class HeartbeatForegroundService : Service() {
     private suspend fun runLoop() {
         val tokenManager = TokenManager(applicationContext)
         while (scope.isActive) {
+            // Backstop for WifiStateEnforcer, same relationship CommandSync.fetchExecuteAck has
+            // to FCM push below — a local check, so it runs regardless of whether a device token
+            // exists yet.
+            WifiBlockManager.enforce(applicationContext)
+
             val deviceToken = tokenManager.getDeviceToken()
             if (!deviceToken.isNullOrBlank()) {
                 try {

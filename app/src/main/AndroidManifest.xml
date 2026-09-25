@@ -25,6 +25,12 @@
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
 
+    <!-- WifiBlockManager/WifiStateEnforcer: CHANGE_WIFI_STATE is normal (not runtime-dangerous),
+         but setWifiEnabled() only actually takes effect for a Device Owner app on API 29+ — see
+         CommandDispatcher's explicit isDeviceOwnerApp() check. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+
     <!-- Package-visibility declaration (API 30+) for KioskLockActivity's "Call Dealer" button,
          which opens the dialer via an implicit ACTION_DIAL Intent. -->
     <queries>

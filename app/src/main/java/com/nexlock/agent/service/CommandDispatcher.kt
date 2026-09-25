@@ -25,8 +25,41 @@ class CommandDispatcher(private val context: Context) {
             "LOCK" -> executeLockCommand()
             "UNLOCK" -> executeUnlockCommand()
             "RELEASE_DEVICE" -> executeReleaseDeviceCommand()
+            "WIFI_BLOCK" -> executeWifiBlockCommand()
+            "WIFI_UNBLOCK" -> executeWifiUnblockCommand()
             else -> ExecutionResult(status = "NOT_SUPPORTED", error = "Unknown command type: $commandType")
         }
+    }
+
+    // setWifiEnabled() silently no-ops (returns false, doesn't throw) for a non-Device-Owner
+    // install on API 29+ — checked explicitly here rather than trusting the call succeeded, same
+    // honesty principle executeLockCommand already follows.
+    private fun executeWifiBlockCommand(): ExecutionResult {
+        val dpmLocal = dpm
+            ?: return ExecutionResult(status = "NOT_SUPPORTED", error = "DevicePolicyManager unavailable on this device.")
+        if (!dpmLocal.isDeviceOwnerApp(context.packageName)) {
+            return ExecutionResult(
+                status = "FAILED",
+                error = "This agent is not Device Owner on this device, so the OS refused to toggle Wi-Fi."
+            )
+        }
+        WifiBlockManager.setBlocked(context, true)
+        WifiBlockManager.disableWifi(context)
+        return ExecutionResult(status = "SUCCESS")
+    }
+
+    private fun executeWifiUnblockCommand(): ExecutionResult {
+        val dpmLocal = dpm
+            ?: return ExecutionResult(status = "NOT_SUPPORTED", error = "DevicePolicyManager unavailable on this device.")
+        if (!dpmLocal.isDeviceOwnerApp(context.packageName)) {
+            return ExecutionResult(
+                status = "NOT_SUPPORTED",
+                error = "This agent is not Device Owner on this device, so there is nothing to unblock."
+            )
+        }
+        WifiBlockManager.setBlocked(context, false)
+        WifiBlockManager.enableWifi(context)
+        return ExecutionResult(status = "SUCCESS")
     }
 
     // Real hardware lock requires the app to be registered as Device Owner. isDeviceOwnerApp()
@@ -131,6 +164,8 @@ class CommandDispatcher(private val context: Context) {
         // exactly as expected, so do this while Device Owner privilege is still fully intact.
         lockStateManager.setLocked(false)
         context.sendBroadcast(Intent(KioskLockActivity.ACTION_UNLOCK).setPackage(context.packageName))
+        WifiBlockManager.setBlocked(context, false)
+        WifiBlockManager.enableWifi(context)
 
         val released = DeviceRestrictionPolicy.releaseDevice(context)
         if (!released) {

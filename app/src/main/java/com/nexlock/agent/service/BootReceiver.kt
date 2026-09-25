@@ -37,6 +37,7 @@ class BootReceiver : BroadcastReceiver() {
         if (tokenManager.getDeviceToken() == null) return
 
         DeviceRestrictionPolicy.applyBaselineRestrictions(context)
+        WifiBlockManager.enforce(context)
 
         if (LockStateManager(context).isLocked()) {
             reassertKioskLock(context)
