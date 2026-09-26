@@ -173,6 +173,29 @@ private fun ProtectedStatusCard(lastSyncedAt: String) {
                 textAlign = TextAlign.Center
             )
 
+            Spacer(modifier = Modifier.height(20.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF422006)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text(
+                        text = "Important — Do not factory reset this device",
+                        color = Color(0xFFFBBF24),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Attempting a factory reset will lock this device. Unlocking it then requires contacting your dealer, and can take 24–72 hours. If you genuinely need to reset this device, contact your dealer first — they can do it safely with no difficulty.",
+                        color = Color(0xFFFDE68A),
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp
+                    )
+                }
+            }
+
             if (lastSyncedAt != "Not sent yet") {
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
@@ -192,6 +215,11 @@ private fun ProtectedStatusCard(lastSyncedAt: String) {
                 fontSize = 11.sp,
                 textAlign = TextAlign.Center
             )
+
+            Spacer(modifier = Modifier.height(8.dp))
+            TextButton(onClick = { TermsAcceptanceActivity.launchForViewing(context) }) {
+                Text("Privacy Policy & Terms & Conditions", color = Color(0xFF38BDF8), fontSize = 12.sp)
+            }
         }
     }
 }

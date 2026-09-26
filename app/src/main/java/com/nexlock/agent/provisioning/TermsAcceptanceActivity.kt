@@ -47,11 +47,13 @@ class TermsAcceptanceActivity : ComponentActivity() {
         val otp = intent.getStringExtra(EXTRA_OTP)
         val serverUrl = intent.getStringExtra(EXTRA_SERVER_URL)
         val isAutoFlow = intent.getBooleanExtra(EXTRA_AUTO_FLOW, false)
+        val isViewOnly = intent.getBooleanExtra(EXTRA_VIEW_ONLY, false)
 
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0F172A)) {
                     TermsAcceptanceScreen(
+                        viewOnly = isViewOnly,
                         onAccept = {
                             if (isAutoFlow) {
                                 ProvisioningHandshakeWorker.enqueue(
@@ -66,7 +68,7 @@ class TermsAcceptanceActivity : ComponentActivity() {
                                         flags = Intent.FLAG_ACTIVITY_NEW_TASK
                                     }
                                 )
-                            } else {
+                            } else if (!isViewOnly) {
                                 TokenManager(this@TermsAcceptanceActivity).setTermsAccepted(true)
                             }
                             finish()
@@ -82,6 +84,7 @@ class TermsAcceptanceActivity : ComponentActivity() {
         private const val EXTRA_OTP = "otp"
         private const val EXTRA_SERVER_URL = "server_url"
         private const val EXTRA_AUTO_FLOW = "auto_flow"
+        private const val EXTRA_VIEW_ONLY = "view_only"
 
         /** QR flow — acceptance triggers the handshake directly using these extras. */
         fun launchForAutoFlow(context: android.content.Context, enrollmentToken: String?, otp: String?, serverUrl: String?) {
@@ -102,13 +105,26 @@ class TermsAcceptanceActivity : ComponentActivity() {
             }
             context.startActivity(intent)
         }
+
+        /**
+         * Lets an already-enrolled customer reopen the same Privacy Policy / Terms & Conditions
+         * content anytime from MainActivity's "protected" screen — read-only, doesn't touch
+         * TokenManager's acceptance flag or trigger any enrollment flow.
+         */
+        fun launchForViewing(context: android.content.Context) {
+            val intent = Intent(context, TermsAcceptanceActivity::class.java).apply {
+                putExtra(EXTRA_VIEW_ONLY, true)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+        }
     }
 }
 
 private enum class LegalTab { PRIVACY, TERMS }
 
 @Composable
-private fun TermsAcceptanceScreen(onAccept: () -> Unit) {
+private fun TermsAcceptanceScreen(viewOnly: Boolean = false, onAccept: () -> Unit) {
     var selectedTab by remember { mutableStateOf(LegalTab.PRIVACY) }
     var privacyContent by remember { mutableStateOf<LegalContentData?>(null) }
     var termsContent by remember { mutableStateOf<LegalContentData?>(null) }
@@ -127,13 +143,13 @@ private fun TermsAcceptanceScreen(onAccept: () -> Unit) {
 
     Column(modifier = Modifier.fillMaxSize().padding(20.dp)) {
         Text(
-            text = "Before you continue",
+            text = if (viewOnly) "Privacy Policy & Terms" else "Before you continue",
             color = Color.White,
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold
         )
         Text(
-            text = "Please review and accept the following to complete setup.",
+            text = if (viewOnly) "For your reference — no action needed." else "Please review and accept the following to complete setup.",
             color = Color(0xFF94A3B8),
             fontSize = 13.sp,
             modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
@@ -191,11 +207,11 @@ private fun TermsAcceptanceScreen(onAccept: () -> Unit) {
 
         Button(
             onClick = onAccept,
-            enabled = !isLoading && !loadError,
+            enabled = viewOnly || (!isLoading && !loadError),
             modifier = Modifier.fillMaxWidth().height(48.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7))
         ) {
-            Text("I Agree — Continue", fontWeight = FontWeight.Bold)
+            Text(if (viewOnly) "Close" else "I Agree — Continue", fontWeight = FontWeight.Bold)
         }
     }
 }
