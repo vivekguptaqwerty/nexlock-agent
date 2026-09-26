@@ -21,17 +21,16 @@ object DeviceRestrictionPolicy {
 
     private const val TAG = "DeviceRestrictionPolicy"
 
-    // The account required to pass Factory Reset Protection after a recovery-mode wipe — see
-    // activateFactoryResetProtection. Deliberately just the email, never a password: the app
-    // never signs into this account itself, it only tells Android which account FRP should
+    // The accounts that can pass Factory Reset Protection after a recovery-mode wipe — see
+    // activateFactoryResetProtection. Deliberately just the emails, never passwords: the app
+    // never signs into either account itself, it only tells Android which accounts FRP should
     // accept. The password is an operational credential typed by a human (dealer/admin) into
     // the phone's own FRP screen during a real recovery — it has no reason to exist in this
     // codebase and must never be added here.
-    // TEST BUILD ONLY (v1.0.16) — swapped to a genuinely aged (7-8 year old) personal account
-    // specifically to isolate whether v1.0.14's failure was really about account age/trust, per
-    // the theory in activateFactoryResetProtection's doc comment below. Do not treat this as the
-    // production account choice either way until this test's result is in.
-    private const val FRP_RECOVERY_ACCOUNT = "vivekg3216@gmail.com"
+    // Two accounts, either one works (setFactoryResetProtectionAccounts takes a list, not just a
+    // single account): the company-controlled account is primary for real recovery operations,
+    // with the personal account kept as a backup in case the company account is ever inaccessible.
+    private val FRP_RECOVERY_ACCOUNTS = listOf("it@nexusdig.in", "vivekg3216@gmail.com")
 
     private val TARGET_RESTRICTIONS = listOf(
         UserManager.DISALLOW_FACTORY_RESET,
@@ -83,11 +82,6 @@ object DeviceRestrictionPolicy {
         applyUserControlLock(context, dpm, admin)
         grantNotificationPermission(context, dpm, admin)
         grantLocationAndPhonePermissions(context, dpm, admin)
-        // RE-ENABLED for the v1.0.16 TEST BUILD ONLY, with FRP_RECOVERY_ACCOUNT swapped to an
-        // aged personal account, specifically to test whether account age was really the cause
-        // of v1.0.14's failure. This build must not be wired to production (AGENT_APK_DOWNLOAD_URL)
-        // — see the disabled state in v1.0.15 and the failure notes on activateFactoryResetProtection
-        // below. Re-disable (comment this call back out) if this test also fails.
         activateFactoryResetProtection(dpm, admin)
 
         verifyAppliedRestrictions(context, dpm, admin)
@@ -104,19 +98,22 @@ object DeviceRestrictionPolicy {
      * but Device Owner provisioning requires the opposite (zero accounts on the device), so FRP
      * was never actually armed on these phones, and a recovery-mode wipe left them as clean,
      * unlocked phones with zero protection. setFactoryResetProtectionPolicy (API 30+) lets a
-     * Device Owner arm FRP itself, requiring FRP_RECOVERY_ACCOUNT specifically (not an empty
-     * enterprise policy — deliberately the well-documented, universally-implemented consumer FRP
-     * path: "sign in with a Google account previously used on this device") so a wiped device
-     * comes up locked to that one NexLock-controlled account instead of being immediately usable.
-     * A dealer recovering a legitimately-reset device signs into FRP_RECOVERY_ACCOUNT on that
-     * screen, then re-provisions Device Owner normally from there (QR or the Activator).
+     * Device Owner arm FRP itself, requiring one of FRP_RECOVERY_ACCOUNTS specifically (not an
+     * empty enterprise policy — deliberately the well-documented, universally-implemented
+     * consumer FRP path: "sign in with a Google account previously used on this device") so a
+     * wiped device comes up locked to one of those NexLock-controlled accounts instead of being
+     * immediately usable. A dealer recovering a legitimately-reset device signs into one of
+     * FRP_RECOVERY_ACCOUNTS on that screen, then re-provisions Device Owner normally from there
+     * (QR or the Activator).
      *
-     * NOTE: not yet confirmed on real hardware — specifically (1) that a recovery-mode wipe
-     * actually triggers this screen requiring FRP_RECOVERY_ACCOUNT and rejects any other account,
+     * NOTE: as of the last real-hardware test on this path (v1.0.17-test, on-screen diagnostic),
+     * this had not yet been conclusively confirmed end-to-end — specifically (1) that a
+     * recovery-mode wipe actually triggers this screen and rejects any account not in the list,
      * and (2) that completing that Google sign-in doesn't itself block the subsequent Device
-     * Owner re-provisioning step (which normally requires zero accounts on the device — unverified
-     * whether Setup Wizard's own FRP-mandated sign-in is exempt from that check). Do not roll this
-     * past a disposable test device until both are confirmed.
+     * Owner re-provisioning step (which normally requires zero accounts on the device —
+     * unverified whether Setup Wizard's own FRP-mandated sign-in is exempt from that check).
+     * Shipping this to production is a deliberate decision made with that caveat still open —
+     * confirm end-to-end recovery on a real device as soon as practical after rollout.
      */
     private fun activateFactoryResetProtection(dpm: DevicePolicyManager, admin: ComponentName) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
@@ -125,11 +122,11 @@ object DeviceRestrictionPolicy {
         }
         try {
             val policy = android.app.admin.FactoryResetProtectionPolicy.Builder()
-                .setFactoryResetProtectionAccounts(listOf(FRP_RECOVERY_ACCOUNT))
+                .setFactoryResetProtectionAccounts(FRP_RECOVERY_ACCOUNTS)
                 .setFactoryResetProtectionEnabled(true)
                 .build()
             dpm.setFactoryResetProtectionPolicy(admin, policy)
-            Log.i(TAG, "setFactoryResetProtectionPolicy applied (enabled=true, account=$FRP_RECOVERY_ACCOUNT)")
+            Log.i(TAG, "setFactoryResetProtectionPolicy applied (enabled=true, accounts=$FRP_RECOVERY_ACCOUNTS)")
         } catch (e: Exception) {
             Log.e(TAG, "setFactoryResetProtectionPolicy failed", e)
         }
