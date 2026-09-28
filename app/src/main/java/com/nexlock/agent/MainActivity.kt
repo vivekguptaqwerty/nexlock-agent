@@ -25,7 +25,6 @@ import androidx.compose.ui.unit.sp
 import com.nexlock.agent.data.storage.LockStateManager
 import com.nexlock.agent.kiosk.KioskLockActivity
 import com.nexlock.agent.provisioning.TermsAcceptanceActivity
-import com.nexlock.agent.service.DeviceRestrictionPolicy
 import com.nexlock.agent.ui.AgentViewModel
 
 class MainActivity : ComponentActivity() {
@@ -205,18 +204,9 @@ private fun ProtectedStatusCard(lastSyncedAt: String) {
                 )
             }
 
-            // TEST BUILD diagnostic only — readable on-screen so FRP status can be confirmed
-            // even on devices where DISALLOW_DEBUGGING_FEATURES blocks adb access post-enrollment.
             val context = LocalContext.current
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = DeviceRestrictionPolicy.getFrpDiagnosticText(context),
-                color = Color(0xFFFACC15),
-                fontSize = 11.sp,
-                textAlign = TextAlign.Center
-            )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             TextButton(onClick = { TermsAcceptanceActivity.launchForViewing(context) }) {
                 Text("Privacy Policy & Terms & Conditions", color = Color(0xFF38BDF8), fontSize = 12.sp)
             }
