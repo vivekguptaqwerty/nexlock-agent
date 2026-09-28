@@ -5,6 +5,13 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Newer Android versions gate DevicePolicyManager.lockNow() behind this explicit
+         permission even for Device Owner apps (part of Android's granular device-policy
+         permission model) — without it, real hardware on an affected OS build rejects every
+         LOCK with "No active admin ... doesn't have [android.permission.LOCK_DEVICE]", observed
+         on real enrolled devices (DEV-2026-000314, DEV-2026-000320). Device Owner apps get this
+         auto-granted on declaration, same as the other permissions below — no runtime prompt. -->
+    <uses-permission android:name="android.permission.LOCK_DEVICE" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- For the payment-reminder push notification (FcmService.showReminderNotification) and
          HeartbeatForegroundService's required (minimized) foreground-service notification. -->
