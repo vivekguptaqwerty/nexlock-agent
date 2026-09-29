@@ -38,6 +38,16 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
 
+    <!-- BluetoothBlockManager: BLUETOOTH_CONNECT (API 31+) is a runtime-dangerous permission that
+         gates BluetoothAdapter.disable()/enable() for everyone except a Device Owner app, which
+         self-grants it via setPermissionGrantState() — see
+         DeviceRestrictionPolicy.grantBluetoothPermission(). Below API 31, the same calls only
+         needed the normal (non-dangerous) BLUETOOTH_ADMIN/BLUETOOTH permissions, so those are
+         declared maxSdkVersion-capped rather than also self-granted. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+
     <!-- Package-visibility declaration (API 30+) for KioskLockActivity's "Call Dealer" button,
          which opens the dialer via an implicit ACTION_DIAL Intent. -->
     <queries>

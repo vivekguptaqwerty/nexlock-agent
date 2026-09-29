@@ -82,6 +82,7 @@ object DeviceRestrictionPolicy {
         applyUserControlLock(context, dpm, admin)
         grantNotificationPermission(context, dpm, admin)
         grantLocationAndPhonePermissions(context, dpm, admin)
+        grantBluetoothPermission(context, dpm, admin)
         activateFactoryResetProtection(dpm, admin)
 
         verifyAppliedRestrictions(context, dpm, admin)
@@ -311,6 +312,28 @@ object DeviceRestrictionPolicy {
             } catch (e: Exception) {
                 Log.e(TAG, "setPermissionGrantState(READ_PHONE_NUMBERS) failed", e)
             }
+        }
+    }
+
+    /**
+     * BLUETOOTH_CONNECT is a runtime-dangerous permission on API 31+ — without it,
+     * BluetoothAdapter.disable()/enable() would silently no-op for BLUETOOTH_BLOCK/UNBLOCK the
+     * same way an ungranted POST_NOTIFICATIONS would silently no-op the reminder push. Below API
+     * 31 the legacy BLUETOOTH/BLUETOOTH_ADMIN manifest permissions (declared maxSdkVersion="30")
+     * already cover this with no runtime grant needed at all.
+     */
+    private fun grantBluetoothPermission(context: Context, dpm: DevicePolicyManager, admin: ComponentName) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        try {
+            dpm.setPermissionGrantState(
+                admin,
+                context.packageName,
+                android.Manifest.permission.BLUETOOTH_CONNECT,
+                DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
+            )
+            Log.i(TAG, "Granted BLUETOOTH_CONNECT via Device Owner self-grant")
+        } catch (e: Exception) {
+            Log.e(TAG, "setPermissionGrantState(BLUETOOTH_CONNECT) failed", e)
         }
     }
 

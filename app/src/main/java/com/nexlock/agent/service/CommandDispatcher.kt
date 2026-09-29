@@ -27,6 +27,8 @@ class CommandDispatcher(private val context: Context) {
             "RELEASE_DEVICE" -> executeReleaseDeviceCommand()
             "WIFI_BLOCK" -> executeWifiBlockCommand()
             "WIFI_UNBLOCK" -> executeWifiUnblockCommand()
+            "BLUETOOTH_BLOCK" -> executeBluetoothBlockCommand()
+            "BLUETOOTH_UNBLOCK" -> executeBluetoothUnblockCommand()
             else -> ExecutionResult(status = "NOT_SUPPORTED", error = "Unknown command type: $commandType")
         }
     }
@@ -59,6 +61,36 @@ class CommandDispatcher(private val context: Context) {
         }
         WifiBlockManager.setBlocked(context, false)
         WifiBlockManager.enableWifi(context)
+        return ExecutionResult(status = "SUCCESS")
+    }
+
+    // Same honesty pattern as WIFI_BLOCK — BluetoothAdapter.disable() is a no-op for a
+    // non-Device-Owner install on API 33+, so this checks explicitly rather than trusting it.
+    private fun executeBluetoothBlockCommand(): ExecutionResult {
+        val dpmLocal = dpm
+            ?: return ExecutionResult(status = "NOT_SUPPORTED", error = "DevicePolicyManager unavailable on this device.")
+        if (!dpmLocal.isDeviceOwnerApp(context.packageName)) {
+            return ExecutionResult(
+                status = "FAILED",
+                error = "This agent is not Device Owner on this device, so the OS refused to toggle Bluetooth."
+            )
+        }
+        BluetoothBlockManager.setBlocked(context, true)
+        BluetoothBlockManager.disableBluetooth(context)
+        return ExecutionResult(status = "SUCCESS")
+    }
+
+    private fun executeBluetoothUnblockCommand(): ExecutionResult {
+        val dpmLocal = dpm
+            ?: return ExecutionResult(status = "NOT_SUPPORTED", error = "DevicePolicyManager unavailable on this device.")
+        if (!dpmLocal.isDeviceOwnerApp(context.packageName)) {
+            return ExecutionResult(
+                status = "NOT_SUPPORTED",
+                error = "This agent is not Device Owner on this device, so there is nothing to unblock."
+            )
+        }
+        BluetoothBlockManager.setBlocked(context, false)
+        BluetoothBlockManager.enableBluetooth(context)
         return ExecutionResult(status = "SUCCESS")
     }
 
@@ -166,6 +198,8 @@ class CommandDispatcher(private val context: Context) {
         context.sendBroadcast(Intent(KioskLockActivity.ACTION_UNLOCK).setPackage(context.packageName))
         WifiBlockManager.setBlocked(context, false)
         WifiBlockManager.enableWifi(context)
+        BluetoothBlockManager.setBlocked(context, false)
+        BluetoothBlockManager.enableBluetooth(context)
 
         val released = DeviceRestrictionPolicy.releaseDevice(context)
         if (!released) {
