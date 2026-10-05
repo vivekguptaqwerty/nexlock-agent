@@ -35,9 +35,13 @@ object DeviceRestrictionPolicy {
     private val TARGET_RESTRICTIONS = listOf(
         UserManager.DISALLOW_FACTORY_RESET,
         UserManager.DISALLOW_DEBUGGING_FEATURES,
-        UserManager.DISALLOW_ADD_USER,
         UserManager.DISALLOW_SAFE_BOOT
     )
+
+    // Previously part of TARGET_RESTRICTIONS. Removed because it also blocks OEM app cloning
+    // (ColorOS/Oppo "App Cloner" showed "This function has been disabled"), which customers need.
+    // Still cleared explicitly below so devices enrolled by an older agent get it lifted too.
+    private val LEGACY_RESTRICTIONS_TO_CLEAR = listOf(UserManager.DISALLOW_ADD_USER)
 
     fun applyBaselineRestrictions(context: Context) {
         val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as? DevicePolicyManager
@@ -61,6 +65,14 @@ object DeviceRestrictionPolicy {
 
         for (restriction in TARGET_RESTRICTIONS) {
             applyRestriction(dpm, admin, restriction)
+        }
+        for (restriction in LEGACY_RESTRICTIONS_TO_CLEAR) {
+            try {
+                dpm.clearUserRestriction(admin, restriction)
+                Log.i(TAG, "clearUserRestriction($restriction) completed")
+            } catch (e: Exception) {
+                Log.e(TAG, "clearUserRestriction($restriction) THREW", e)
+            }
         }
 
         try {
