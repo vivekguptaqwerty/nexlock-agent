@@ -26,11 +26,15 @@ import com.nexlock.agent.kiosk.KioskLockActivity
  * stick the first time (for whatever reason — see DeviceRestrictionPolicy's verification
  * logging) gets a second chance to apply on every single boot, rather than only ever being
  * attempted once at enrollment time.
+ *
+ * Also fires on ACTION_MY_PACKAGE_REPLACED — the same reassertion is just as relevant right
+ * after AgentSelfUpdater silently installs a new version over the running one as it is after a
+ * real reboot (the process restarts either way, and nothing here is reboot-specific).
  */
 class BootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        if (intent.action != Intent.ACTION_BOOT_COMPLETED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
 
         val tokenManager = TokenManager(context)
         if (!tokenManager.isEnrolled()) return

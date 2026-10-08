@@ -65,7 +65,13 @@ data class HeartbeatRequest(
 data class HeartbeatData(
     @Json(name = "serverTime") val serverTime: String,
     @Json(name = "heartbeatInterval") val heartbeatInterval: Long = 60,
-    @Json(name = "status") val status: String = "HEALTHY"
+    @Json(name = "status") val status: String = "HEALTHY",
+    // See MdmService.processHeartbeat — server-side comparison of this device's just-reported
+    // appVersion against AGENT_APK_VERSION, so an already-current device never gets a stale
+    // "update available" signal from a cached response.
+    @Json(name = "updateAvailable") val updateAvailable: Boolean = false,
+    @Json(name = "latestAgentVersion") val latestAgentVersion: String? = null,
+    @Json(name = "updateDownloadUrl") val updateDownloadUrl: String? = null
 )
 
 @JsonClass(generateAdapter = true)

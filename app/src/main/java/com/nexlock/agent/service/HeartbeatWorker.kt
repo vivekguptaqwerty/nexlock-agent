@@ -46,6 +46,12 @@ class HeartbeatWorker(
             return Result.retry()
         }
 
+        result.getOrNull()?.let { data ->
+            if (data.updateAvailable && data.latestAgentVersion != null && data.updateDownloadUrl != null) {
+                AgentSelfUpdater.checkAndUpdate(applicationContext, data.latestAgentVersion, data.updateDownloadUrl)
+            }
+        }
+
         // This periodic worker is the one path in the app with a real NetworkType.CONNECTED
         // constraint AND WorkManager-managed retry — unlike FCM push (silently dropped by some
         // OEM battery managers, observed on real hardware) or the boot-time sync (only fires

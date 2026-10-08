@@ -109,6 +109,19 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <!-- Fires after AgentSelfUpdater silently installs a new version over the running
+                     one — same reassertion BootReceiver already does on a real reboot (baseline
+                     restrictions, Wi-Fi/Bluetooth block enforcement, kiosk lock state, heartbeat
+                     scheduling) applies equally well right after a package replacement. -->
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".service.AgentSelfUpdater$InstallResultReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.nexlock.agent.SELF_UPDATE_INSTALL_RESULT" />
             </intent-filter>
         </receiver>
 
