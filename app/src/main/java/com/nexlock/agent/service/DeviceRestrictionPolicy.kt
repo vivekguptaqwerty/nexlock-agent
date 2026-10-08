@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.os.Build
 import android.os.UserManager
+import android.provider.Settings
 import android.util.Log
 
 /**
@@ -96,8 +97,42 @@ object DeviceRestrictionPolicy {
         grantLocationAndPhonePermissions(context, dpm, admin)
         grantBluetoothPermission(context, dpm, admin)
         activateFactoryResetProtection(dpm, admin)
+        disableAdbAndDeveloperOptions(dpm, admin)
 
         verifyAppliedRestrictions(context, dpm, admin)
+    }
+
+    /**
+     * DISALLOW_DEBUGGING_FEATURES (in TARGET_RESTRICTIONS above) only blocks the user from
+     * toggling USB/wireless debugging back ON via Settings — Android does NOT retroactively turn
+     * it off if it was already on, which it always is at this exact point: wireless ADB is how
+     * Device Owner itself just got set during activation (see AdbActivationModule in
+     * nexlock-dealer-rn). Net effect on real devices: the Developer Options entry disappears from
+     * Settings, but debugging stays silently active in the background forever, with no way for
+     * the customer or dealer to turn it off through the UI — and several banking apps explicitly
+     * refuse to run while Settings.Global.ADB_ENABLED is nonzero, locking customers out of apps
+     * they need. setGlobalSetting() is how a Device Owner forces these off directly instead of
+     * just blocking future changes; called again on every boot (applyBaselineRestrictions runs
+     * from BootReceiver too) in case something flipped it back on in the meantime.
+     *
+     * Safe to run at this point in the flow specifically: the dealer's wireless ADB session is
+     * only ever used to install the agent and run `dpm set-device-owner`, which already completed
+     * before this runs — this is called from the enrollment handshake (after the customer accepts
+     * Terms) or boot, both well after the dealer's phone has disconnected.
+     */
+    private fun disableAdbAndDeveloperOptions(dpm: DevicePolicyManager, admin: ComponentName) {
+        try {
+            dpm.setGlobalSetting(admin, Settings.Global.ADB_ENABLED, "0")
+            Log.i(TAG, "Forced Settings.Global.ADB_ENABLED to 0")
+        } catch (e: Exception) {
+            Log.e(TAG, "setGlobalSetting(ADB_ENABLED) failed", e)
+        }
+        try {
+            dpm.setGlobalSetting(admin, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, "0")
+            Log.i(TAG, "Forced Settings.Global.DEVELOPMENT_SETTINGS_ENABLED to 0")
+        } catch (e: Exception) {
+            Log.e(TAG, "setGlobalSetting(DEVELOPMENT_SETTINGS_ENABLED) failed", e)
+        }
     }
 
     /**
