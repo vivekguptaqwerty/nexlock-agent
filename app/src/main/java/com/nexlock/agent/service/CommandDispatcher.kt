@@ -29,6 +29,10 @@ class CommandDispatcher(private val context: Context) {
             "WIFI_UNBLOCK" -> executeWifiUnblockCommand()
             "BLUETOOTH_BLOCK" -> executeBluetoothBlockCommand()
             "BLUETOOTH_UNBLOCK" -> executeBluetoothUnblockCommand()
+            "WALLPAPER_OVERLAY" -> executeWallpaperOverlayCommand()
+            "WALLPAPER_OVERLAY_CLEAR" -> executeWallpaperOverlayClearCommand()
+            "ALARM" -> executeAlarmCommand()
+            "ALARM_STOP" -> executeAlarmStopCommand()
             else -> ExecutionResult(status = "NOT_SUPPORTED", error = "Unknown command type: $commandType")
         }
     }
@@ -91,6 +95,55 @@ class CommandDispatcher(private val context: Context) {
         }
         BluetoothBlockManager.setBlocked(context, false)
         BluetoothBlockManager.enableBluetooth(context)
+        return ExecutionResult(status = "SUCCESS")
+    }
+
+    // Reuses fetchAndCacheLockInfo() (below) for the dealer phone number shown on the overlay —
+    // that method isn't actually lock-specific despite its name, it's just "fetch and cache
+    // dealer contact details," which this needs exactly as much as LOCK does.
+    private suspend fun executeWallpaperOverlayCommand(): ExecutionResult {
+        val dpmLocal = dpm
+            ?: return ExecutionResult(status = "NOT_SUPPORTED", error = "DevicePolicyManager unavailable on this device.")
+        if (!dpmLocal.isDeviceOwnerApp(context.packageName)) {
+            return ExecutionResult(
+                status = "FAILED",
+                error = "This agent is not Device Owner on this device, so the OS refused to set the wallpaper."
+            )
+        }
+        fetchAndCacheLockInfo()
+        WallpaperOverlayManager.enable(context)
+        return ExecutionResult(status = "SUCCESS")
+    }
+
+    private fun executeWallpaperOverlayClearCommand(): ExecutionResult {
+        val dpmLocal = dpm
+            ?: return ExecutionResult(status = "NOT_SUPPORTED", error = "DevicePolicyManager unavailable on this device.")
+        if (!dpmLocal.isDeviceOwnerApp(context.packageName)) {
+            return ExecutionResult(
+                status = "NOT_SUPPORTED",
+                error = "This agent is not Device Owner on this device, so there is nothing to clear."
+            )
+        }
+        WallpaperOverlayManager.disable(context)
+        return ExecutionResult(status = "SUCCESS")
+    }
+
+    // Same honesty pattern as every other command — in practice any command reaching this
+    // dispatcher at all already implies a Device-Owner-enrolled phone (CommandSync only polls
+    // once a device token exists, which requires enrollment), but checking explicitly keeps a
+    // non-provisioned test build behaving the same honest way across every command type.
+    private fun executeAlarmCommand(): ExecutionResult {
+        val dpmLocal = dpm
+            ?: return ExecutionResult(status = "NOT_SUPPORTED", error = "DevicePolicyManager unavailable on this device.")
+        if (!dpmLocal.isDeviceOwnerApp(context.packageName)) {
+            return ExecutionResult(status = "FAILED", error = "This agent is not Device Owner on this device.")
+        }
+        AlarmPlaybackService.start(context)
+        return ExecutionResult(status = "SUCCESS")
+    }
+
+    private fun executeAlarmStopCommand(): ExecutionResult {
+        AlarmPlaybackService.stop(context)
         return ExecutionResult(status = "SUCCESS")
     }
 
@@ -200,6 +253,8 @@ class CommandDispatcher(private val context: Context) {
         WifiBlockManager.enableWifi(context)
         BluetoothBlockManager.setBlocked(context, false)
         BluetoothBlockManager.enableBluetooth(context)
+        WallpaperOverlayManager.disable(context)
+        AlarmPlaybackService.stop(context)
 
         val released = DeviceRestrictionPolicy.releaseDevice(context)
         if (!released) {

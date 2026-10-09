@@ -96,6 +96,7 @@ object DeviceRestrictionPolicy {
         grantNotificationPermission(context, dpm, admin)
         grantLocationAndPhonePermissions(context, dpm, admin)
         grantBluetoothPermission(context, dpm, admin)
+        grantSystemAlertWindowPermission(context, dpm, admin)
         activateFactoryResetProtection(dpm, admin)
         disableAdbAndDeveloperOptions(dpm, admin)
 
@@ -381,6 +382,30 @@ object DeviceRestrictionPolicy {
             Log.i(TAG, "Granted BLUETOOTH_CONNECT via Device Owner self-grant")
         } catch (e: Exception) {
             Log.e(TAG, "setPermissionGrantState(BLUETOOTH_CONNECT) failed", e)
+        }
+    }
+
+    /**
+     * SYSTEM_ALERT_WINDOW ("draw over other apps") is a special permission, not a standard
+     * runtime one — unlike BLUETOOTH_CONNECT/POST_NOTIFICATIONS above, setPermissionGrantState()
+     * is documented for runtime permissions specifically, and there's no confirmed guarantee it
+     * actually applies to this one on every Android version. Attempted anyway (best-effort, same
+     * defensive pattern as everything else here) since it's free if it doesn't work — see
+     * WallpaperOverlayService's doc comment for what happens if this silently doesn't take:
+     * the wallpaper half of that feature still works on its own, only the cross-app overlay
+     * banner is affected.
+     */
+    private fun grantSystemAlertWindowPermission(context: Context, dpm: DevicePolicyManager, admin: ComponentName) {
+        try {
+            dpm.setPermissionGrantState(
+                admin,
+                context.packageName,
+                android.Manifest.permission.SYSTEM_ALERT_WINDOW,
+                DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
+            )
+            Log.i(TAG, "Attempted SYSTEM_ALERT_WINDOW grant via Device Owner self-grant")
+        } catch (e: Exception) {
+            Log.e(TAG, "setPermissionGrantState(SYSTEM_ALERT_WINDOW) failed", e)
         }
     }
 

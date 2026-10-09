@@ -43,6 +43,7 @@ class BootReceiver : BroadcastReceiver() {
         DeviceRestrictionPolicy.applyBaselineRestrictions(context)
         WifiBlockManager.enforce(context)
         BluetoothBlockManager.enforce(context)
+        WallpaperOverlayManager.enforce(context)
 
         if (LockStateManager(context).isLocked()) {
             reassertKioskLock(context)

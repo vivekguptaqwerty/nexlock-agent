@@ -48,6 +48,19 @@
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
 
+    <!-- WallpaperOverlayManager: SET_WALLPAPER/SET_WALLPAPER_HINTS are normal (not
+         runtime-dangerous) permissions, auto-granted on declaration like everything else here.
+         SYSTEM_ALERT_WINDOW ("draw over other apps") is different — it's a special permission,
+         not a standard runtime one, so declaring it here is necessary but not sufficient; see
+         WallpaperOverlayService's doc comment for the self-grant attempt and its caveat. -->
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
+    <uses-permission android:name="android.permission.SET_WALLPAPER_HINTS" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- AlarmPlaybackService: turns the screen on so the buzzer is impossible to miss, same as
+         a real alarm clock app. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
     <!-- Package-visibility declaration (API 30+) for KioskLockActivity's "Call Dealer" button,
          which opens the dialer via an implicit ACTION_DIAL Intent. -->
     <queries>
@@ -101,6 +114,16 @@
 
         <service
             android:name=".service.HeartbeatForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="systemExempted" />
+
+        <service
+            android:name=".service.WallpaperOverlayService"
+            android:exported="false"
+            android:foregroundServiceType="systemExempted" />
+
+        <service
+            android:name=".service.AlarmPlaybackService"
             android:exported="false"
             android:foregroundServiceType="systemExempted" />
 
