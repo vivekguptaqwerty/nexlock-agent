@@ -57,11 +57,22 @@ object WallpaperOverlayManager {
         WallpaperOverlayService.stop(context)
     }
 
-    /** Re-applies the current state — used on boot (the overlay service and the restriction
-     * don't survive a reboot on their own; the wallpaper itself is OS-persisted already). */
+    /**
+     * Re-applies the current state — called on boot and, more importantly, on every heartbeat
+     * (see HeartbeatForegroundService.runLoop) since the real-world failure mode observed isn't
+     * a reboot, it's an OEM battery manager killing WallpaperOverlayService mid-session.
+     *
+     * Stops the service before restarting it rather than just calling start() — start() alone is
+     * a no-op against an already-running service instance (showOverlay()'s overlayView != null
+     * guard), which wouldn't help if the OS silently tore down the overlay WINDOW while the
+     * process itself stayed alive (observed as a distinct failure mode from a full process kill
+     * on some OEM skins). Stop+start forces onDestroy() to clean up whatever stale state exists,
+     * then a fresh showOverlay() call on the next onCreate()/onStartCommand().
+     */
     fun enforce(context: Context) {
         if (isActive(context)) {
             applyRestriction(context, true)
+            WallpaperOverlayService.stop(context)
             WallpaperOverlayService.start(context)
         }
     }

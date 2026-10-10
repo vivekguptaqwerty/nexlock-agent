@@ -92,6 +92,13 @@ class HeartbeatForegroundService : Service() {
             // to FCM push below — a local check, so it runs regardless of whether a device token
             // exists yet.
             WifiBlockManager.enforce(applicationContext)
+            // Same backstop for the wallpaper overlay banner — BootReceiver only re-asserts it on
+            // a real reboot, but the actual failure mode observed on real hardware is an OEM
+            // battery manager killing WallpaperOverlayService mid-session (same aggressive
+            // background-process killing behavior already seen elsewhere on Chinese OEM skins),
+            // well before any reboot happens. This guarantees the banner comes back within one
+            // heartbeat interval instead of staying gone until the device next restarts.
+            WallpaperOverlayManager.enforce(applicationContext)
 
             val deviceToken = tokenManager.getDeviceToken()
             if (!deviceToken.isNullOrBlank()) {
