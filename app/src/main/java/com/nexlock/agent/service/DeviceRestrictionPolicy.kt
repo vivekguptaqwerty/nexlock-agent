@@ -99,6 +99,7 @@ object DeviceRestrictionPolicy {
         grantSystemAlertWindowPermission(context, dpm, admin)
         activateFactoryResetProtection(dpm, admin)
         disableAdbAndDeveloperOptions(dpm, admin)
+        writeDevelopmentSettingsFlagDirectly(context)
 
         verifyAppliedRestrictions(context, dpm, admin)
     }
@@ -128,11 +129,48 @@ object DeviceRestrictionPolicy {
         } catch (e: Exception) {
             Log.e(TAG, "setGlobalSetting(ADB_ENABLED) failed", e)
         }
+        // DEVELOPMENT_SETTINGS_ENABLED is NOT on the small allowlist of global settings keys
+        // DevicePolicyManager.setGlobalSetting() accepts from a Device Owner (ADB_ENABLED above
+        // is; this key isn't) — this call reliably throws SecurityException on real devices and
+        // was silently swallowed here before, which is exactly why banking apps that read this
+        // raw setting directly (bypassing the Settings UI, which DISALLOW_DEBUGGING_FEATURES
+        // above does successfully hide) kept flagging "Developer options enabled" even after
+        // enrollment. Left in as a harmless attempt in case a future/OEM build ever does permit
+        // it, but writeDevelopmentSettingsFlagDirectly() below is the path that actually works.
         try {
             dpm.setGlobalSetting(admin, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, "0")
-            Log.i(TAG, "Forced Settings.Global.DEVELOPMENT_SETTINGS_ENABLED to 0")
+            Log.i(TAG, "Forced Settings.Global.DEVELOPMENT_SETTINGS_ENABLED to 0 via DPM")
         } catch (e: Exception) {
-            Log.e(TAG, "setGlobalSetting(DEVELOPMENT_SETTINGS_ENABLED) failed", e)
+            Log.e(TAG, "setGlobalSetting(DEVELOPMENT_SETTINGS_ENABLED) failed (expected — not DPM-allowlisted)", e)
+        }
+    }
+
+    /**
+     * The actual fix for DEVELOPMENT_SETTINGS_ENABLED: writing Settings.Global directly requires
+     * WRITE_SECURE_SETTINGS, a signature|privileged permission this app can't self-grant via
+     * DevicePolicyManager.setPermissionGrantState (that API only reaches ordinary runtime
+     * permissions). It's granted once, out-of-band, by the dealer's wireless-ADB activation tool
+     * (`pm grant com.nexlock.agent android.permission.WRITE_SECURE_SETTINGS`, run alongside
+     * `dpm set-device-owner` — see AdbActivationModule.activate() in nexlock-dealer-rn) while that
+     * adb session is still live, since there's no other avenue to obtain it afterward. A device
+     * enrolled before that activation-tool change shipped won't have the permission yet; this
+     * silently no-ops (logged, not crashing) until the dealer re-runs activation against that
+     * phone to pick up the grant — `pm grant` doesn't require the app to not already be Device
+     * Owner, so re-running activation is a safe, idempotent repair for already-enrolled devices.
+     */
+    private fun writeDevelopmentSettingsFlagDirectly(context: Context) {
+        val granted = context.checkSelfPermission(android.Manifest.permission.WRITE_SECURE_SETTINGS) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            Log.e(TAG, "WRITE_SECURE_SETTINGS not granted — cannot clear DEVELOPMENT_SETTINGS_ENABLED directly. " +
+                "This device needs activation re-run to pick up the pm grant step.")
+            return
+        }
+        try {
+            Settings.Global.putInt(context.contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0)
+            Log.i(TAG, "Forced Settings.Global.DEVELOPMENT_SETTINGS_ENABLED to 0 directly (WRITE_SECURE_SETTINGS)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Direct Settings.Global.putInt(DEVELOPMENT_SETTINGS_ENABLED) failed", e)
         }
     }
 
@@ -511,6 +549,18 @@ object DeviceRestrictionPolicy {
                 Log.e(TAG, "NOT ACTIVE: getFactoryResetProtectionPolicy returned null — FRP is not armed on this device")
             }
         }
+
+        val hasWriteSecureSettings = context.checkSelfPermission(android.Manifest.permission.WRITE_SECURE_SETTINGS) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        val devSettingsValue = try {
+            Settings.Global.getInt(context.contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, -1)
+        } catch (e: Exception) {
+            -2
+        }
+        Log.i(TAG, "VERIFIED WRITE_SECURE_SETTINGS granted=$hasWriteSecureSettings, " +
+            "DEVELOPMENT_SETTINGS_ENABLED readback=$devSettingsValue (0 = off, 1 = still on, " +
+            "-1/-2 = read failed). If granted=false, this device needs activation re-run to pick " +
+            "up the pm grant step added to AdbActivationModule.")
     }
 
     /**

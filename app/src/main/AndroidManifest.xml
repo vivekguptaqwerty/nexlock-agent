@@ -12,6 +12,15 @@
          on real enrolled devices (DEV-2026-000314, DEV-2026-000320). Device Owner apps get this
          auto-granted on declaration, same as the other permissions below — no runtime prompt. -->
     <uses-permission android:name="android.permission.LOCK_DEVICE" />
+    <!-- signature|privileged permission, not auto-granted on declaration like the others here —
+         must additionally be granted via `pm grant` from the dealer's wireless-ADB activation
+         session (see AdbActivationModule.activate() in nexlock-dealer-rn), since this app can't
+         self-grant it through DevicePolicyManager.setPermissionGrantState (that only reaches
+         ordinary runtime permissions). Used by DeviceRestrictionPolicy to write
+         Settings.Global.DEVELOPMENT_SETTINGS_ENABLED directly — the one developer-options flag
+         DevicePolicyManager.setGlobalSetting() won't accept from a Device Owner. Declaring it
+         here is required for `pm grant` to succeed at all, even though it isn't auto-granted. -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- For the payment-reminder push notification (FcmService.showReminderNotification) and
          HeartbeatForegroundService's required (minimized) foreground-service notification. -->
