@@ -67,6 +67,7 @@ class ProvisioningHandshakeWorker(
         DeviceRestrictionPolicy.applyBaselineRestrictions(applicationContext)
         HeartbeatScheduler.schedule(applicationContext)
         HeartbeatForegroundService.start(applicationContext)
+        NotificationTimeoutScheduler.schedule(applicationContext, data.notificationVisibilityMinutes)
         CommandSync.fetchExecuteAck(applicationContext, data.deviceToken)
 
         return Result.success()

@@ -16,6 +16,7 @@ import com.nexlock.agent.service.DeviceRestrictionPolicy
 import com.nexlock.agent.service.DeviceTelemetry
 import com.nexlock.agent.service.HeartbeatForegroundService
 import com.nexlock.agent.service.HeartbeatScheduler
+import com.nexlock.agent.service.NotificationTimeoutScheduler
 import com.nexlock.agent.service.currentFcmToken
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -125,6 +126,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
                 // handshake; skipping this left a real Device Owner device with none of that
                 // enforcement active until its next reboot.
                 DeviceRestrictionPolicy.applyBaselineRestrictions(getApplication())
+                NotificationTimeoutScheduler.schedule(getApplication(), data.notificationVisibilityMinutes)
 
                 scheduleHeartbeatWorker()
                 sendManualHeartbeat()

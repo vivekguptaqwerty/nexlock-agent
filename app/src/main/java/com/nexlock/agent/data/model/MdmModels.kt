@@ -35,7 +35,10 @@ data class HandshakeData(
     @Json(name = "loanId") val loanId: String? = null,
     @Json(name = "heartbeatInterval") val heartbeatInterval: Long = 60,
     @Json(name = "pollingInterval") val pollingInterval: Long = 300,
-    @Json(name = "serverTime") val serverTime: String
+    @Json(name = "serverTime") val serverTime: String,
+    // Backend-configured so it can be tuned without a new Agent release — see
+    // NotificationTimeoutScheduler for what this actually drives.
+    @Json(name = "notificationVisibilityMinutes") val notificationVisibilityMinutes: Long = 120
 )
 
 @JsonClass(generateAdapter = true)

@@ -271,6 +271,7 @@ class CommandDispatcher(private val context: Context) {
         TokenManager(context).clear()
         HeartbeatScheduler.cancel(context)
         HeartbeatForegroundService.stop(context)
+        NotificationTimeoutScheduler.cancel(context)
 
         return ExecutionResult(status = "SUCCESS")
     }
