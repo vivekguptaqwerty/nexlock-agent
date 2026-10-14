@@ -220,7 +220,14 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun scheduleHeartbeatWorker() {
-        HeartbeatScheduler.schedule(getApplication())
-        HeartbeatForegroundService.start(getApplication())
+        // Independently guarded — see BootReceiver's identical pattern for why: observed on real
+        // hardware that WorkManager.getInstance() (inside HeartbeatScheduler.schedule) can throw
+        // "WorkManager is not initialized properly" in certain timing conditions, and an
+        // unguarded throw here would also skip HeartbeatForegroundService.start() right after
+        // it, which is the one thing that actually keeps command delivery working.
+        runCatching { HeartbeatScheduler.schedule(getApplication()) }
+            .onFailure { android.util.Log.e("AgentViewModel", "HeartbeatScheduler.schedule failed", it) }
+        runCatching { HeartbeatForegroundService.start(getApplication()) }
+            .onFailure { android.util.Log.e("AgentViewModel", "HeartbeatForegroundService.start failed", it) }
     }
 }

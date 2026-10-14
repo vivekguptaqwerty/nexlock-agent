@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import com.nexlock.agent.data.storage.LockStateManager
 import com.nexlock.agent.data.storage.TokenManager
 import com.nexlock.agent.kiosk.KioskLockActivity
@@ -33,6 +34,10 @@ import com.nexlock.agent.kiosk.KioskLockActivity
  */
 class BootReceiver : BroadcastReceiver() {
 
+    companion object {
+        private const val TAG = "BootReceiver"
+    }
+
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
 
@@ -40,27 +45,49 @@ class BootReceiver : BroadcastReceiver() {
         if (!tokenManager.isEnrolled()) return
         if (tokenManager.getDeviceToken() == null) return
 
-        DeviceRestrictionPolicy.applyBaselineRestrictions(context)
-        WifiBlockManager.enforce(context)
-        BluetoothBlockManager.enforce(context)
-        WallpaperOverlayManager.enforce(context)
+        // Each step below is independently guarded — this whole receiver previously crashed
+        // outright the moment ANY one call threw (observed on real hardware: a HyperOS build
+        // that dispatches BOOT_COMPLETED before androidx.startup's InitializationProvider has
+        // run for this process, so WorkManager.getInstance() throws "WorkManager is not
+        // initialized properly"). Because Kotlin/Java exceptions abort the rest of the
+        // function, that one throw from HeartbeatScheduler.schedule() silently skipped EVERY
+        // step after it too — HeartbeatForegroundService.start(), the pending-ack retry check,
+        // BootSyncWorker.enqueue() — leaving a rebooted device with no working heartbeat and no
+        // way to receive LOCK/UNLOCK/RELEASE_DEVICE until the app was somehow reopened by hand.
+        // Each call is cheap and independent of the others, so one failing must not take the
+        // rest down with it.
+        runCatching { DeviceRestrictionPolicy.applyBaselineRestrictions(context) }
+            .onFailure { Log.e(TAG, "applyBaselineRestrictions failed on boot", it) }
+        runCatching { WifiBlockManager.enforce(context) }
+            .onFailure { Log.e(TAG, "WifiBlockManager.enforce failed on boot", it) }
+        runCatching { BluetoothBlockManager.enforce(context) }
+            .onFailure { Log.e(TAG, "BluetoothBlockManager.enforce failed on boot", it) }
+        runCatching { WallpaperOverlayManager.enforce(context) }
+            .onFailure { Log.e(TAG, "WallpaperOverlayManager.enforce failed on boot", it) }
 
-        if (LockStateManager(context).isLocked()) {
-            reassertKioskLock(context)
-        }
+        runCatching {
+            if (LockStateManager(context).isLocked()) {
+                reassertKioskLock(context)
+            }
+        }.onFailure { Log.e(TAG, "reassertKioskLock failed on boot", it) }
 
-        HeartbeatScheduler.schedule(context)
-        HeartbeatForegroundService.start(context)
-        if (!PendingAckQueue.isEmpty(context)) {
-            RetryWorker.scheduleOneShot(context)
-        }
+        runCatching { HeartbeatScheduler.schedule(context) }
+            .onFailure { Log.e(TAG, "HeartbeatScheduler.schedule failed on boot", it) }
+        runCatching { HeartbeatForegroundService.start(context) }
+            .onFailure { Log.e(TAG, "HeartbeatForegroundService.start failed on boot", it) }
+        runCatching {
+            if (!PendingAckQueue.isEmpty(context)) {
+                RetryWorker.scheduleOneShot(context)
+            }
+        }.onFailure { Log.e(TAG, "RetryWorker.scheduleOneShot failed on boot", it) }
 
         // Enqueued as a network-constrained WorkManager job rather than fired directly as a
         // coroutine: BOOT_COMPLETED does not guarantee network connectivity is up yet, and a
         // raw one-shot call that loses that race would fail silently with nothing to retry it
         // until the next scheduled heartbeat (up to 24h later). BootSyncWorker won't start
         // until connectivity is actually available, and retries with backoff on failure.
-        BootSyncWorker.enqueue(context)
+        runCatching { BootSyncWorker.enqueue(context) }
+            .onFailure { Log.e(TAG, "BootSyncWorker.enqueue failed on boot", it) }
     }
 
     private fun reassertKioskLock(context: Context) {
