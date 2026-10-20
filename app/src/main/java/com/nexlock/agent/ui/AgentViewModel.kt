@@ -77,6 +77,21 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
+        // This manual form is the path used right after `adb shell dpm set-device-owner` (see
+        // its doc comment above) — exactly the step observed, on real devices, to sometimes
+        // report success without actually granting ownership. Completing the handshake anyway
+        // left the backend marking the device ENROLLED/Assigned with no real Device Owner
+        // behind it — invisible until a dealer tested Lock/Unlock and found it silently
+        // failing, at which point the only fix was a full factory-reset re-enrollment. Checking
+        // this here, before the handshake is even sent, stops that dead in its tracks: the
+        // dealer re-runs activation (now itself verified, see AdbActivationModule.kt) instead
+        // of ever reaching a falsely "Assigned" device.
+        val dpm = getApplication<Application>().getSystemService(android.content.Context.DEVICE_POLICY_SERVICE) as? android.app.admin.DevicePolicyManager
+        if (dpm == null || !dpm.isDeviceOwnerApp(getApplication<Application>().packageName)) {
+            enrollmentError = "Device admin was not set up on this phone (Device Owner is missing). Enrolling now would leave Lock/Unlock broken. Go back to the dealer app and re-run Activate first — do not enter the OTP until that succeeds."
+            return
+        }
+
         enrollmentError = null
         isEnrolling = true
         NetworkModule.setBaseUrl(serverUrlInput)
