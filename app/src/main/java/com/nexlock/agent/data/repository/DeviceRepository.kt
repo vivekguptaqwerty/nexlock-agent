@@ -133,6 +133,26 @@ class DeviceRepository {
         }
     }
 
+    /**
+     * Checks whether a locally-stored device token still corresponds to a real, current
+     * enrollment on the backend — deviceAuthMiddleware returns 401 for a token whose Device row
+     * doesn't exist or was soft-deleted (DEV-2026-001384/001387's root cause: a phone reused for
+     * a new customer without ever being Released first keeps its OLD local "enrolled" state
+     * forever, with no backend-side device to match it, since nothing on launch ever re-checks).
+     * Any GET that device-auth-gates would do; getLockInfo is simply already in place for it.
+     * Returns the raw HTTP status code — 401 specifically means "this token is gone, safe to
+     * clear local state"; anything else (network failure, 5xx, no connectivity) must NOT be
+     * treated as "stale," or a genuinely still-locked phone could get wiped by a bad network
+     * moment. -1 signals that non-definitive case.
+     */
+    suspend fun checkDeviceTokenStillValid(deviceToken: String): Int {
+        return try {
+            NetworkModule.apiService.getLockInfo("Bearer $deviceToken").code()
+        } catch (e: Exception) {
+            -1
+        }
+    }
+
     suspend fun getPrivacyPolicy(): Result<LegalContentData> {
         return try {
             val response = NetworkModule.apiService.getPrivacyPolicy()

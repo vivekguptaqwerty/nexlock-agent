@@ -68,6 +68,33 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
             scheduleHeartbeatWorker()
             sendManualHeartbeat() // event-triggered: app opened
             pollAndExecuteCommands()
+            validateStoredEnrollment()
+        }
+    }
+
+    /**
+     * Self-heals a stale local enrollment — see DeviceRepository.checkDeviceTokenStillValid's
+     * doc comment for the root cause (DEV-2026-001384/001387): a phone reused for a new
+     * customer without ever being Released first shows isEnrolled=true forever, from a prior
+     * enrollment, with no backend-side Device row left to match it — the OTP screen for the new
+     * customer never even appears, since isEnrolled alone decides what MainActivity shows.
+     * A 401 specifically means the backend has no idea what this token is anymore (the Device
+     * row is gone or was never this one); only then is it safe to drop back to the enrollment
+     * form. Any other outcome (network failure, 5xx, no connectivity) leaves everything exactly
+     * as it was — a phone that's genuinely still enrolled and locked must never lose that
+     * protection just because of a bad network moment.
+     */
+    private fun validateStoredEnrollment() {
+        val token = tokenManager.getDeviceToken()
+        if (token.isNullOrBlank()) return
+        viewModelScope.launch {
+            if (repository.checkDeviceTokenStillValid(token) == 401) {
+                TokenManager(getApplication()).clear()
+                com.nexlock.agent.data.storage.LockStateManager(getApplication()).setLocked(false)
+                isEnrolled = false
+                deviceId = ""
+                deviceToken = ""
+            }
         }
     }
 
