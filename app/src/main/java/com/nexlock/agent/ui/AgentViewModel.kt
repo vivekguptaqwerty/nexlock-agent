@@ -77,21 +77,6 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        // This manual form is the path used right after `adb shell dpm set-device-owner` (see
-        // its doc comment above) — exactly the step observed, on real devices, to sometimes
-        // report success without actually granting ownership. Completing the handshake anyway
-        // left the backend marking the device ENROLLED/Assigned with no real Device Owner
-        // behind it — invisible until a dealer tested Lock/Unlock and found it silently
-        // failing, at which point the only fix was a full factory-reset re-enrollment. Checking
-        // this here, before the handshake is even sent, stops that dead in its tracks: the
-        // dealer re-runs activation (now itself verified, see AdbActivationModule.kt) instead
-        // of ever reaching a falsely "Assigned" device.
-        val dpm = getApplication<Application>().getSystemService(android.content.Context.DEVICE_POLICY_SERVICE) as? android.app.admin.DevicePolicyManager
-        if (dpm == null || !dpm.isDeviceOwnerApp(getApplication<Application>().packageName)) {
-            enrollmentError = "Device admin was not set up on this phone (Device Owner is missing). Enrolling now would leave Lock/Unlock broken. Go back to the dealer app and re-run Activate first — do not enter the OTP until that succeeds."
-            return
-        }
-
         enrollmentError = null
         isEnrolling = true
         NetworkModule.setBaseUrl(serverUrlInput)
@@ -109,6 +94,40 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         viewModelScope.launch {
+            // This manual form is the path used right after `adb shell dpm set-device-owner`
+            // (see its doc comment above) — exactly the step observed, on real devices, to
+            // sometimes report success without actually granting ownership. Completing the
+            // handshake anyway left the backend marking the device ENROLLED/Assigned with no
+            // real Device Owner behind it — invisible until a dealer tested Lock/Unlock and
+            // found it silently failing, at which point the only fix was a full factory-reset
+            // re-enrollment. Checking this here, before the handshake is sent, stops that dead
+            // in its tracks.
+            //
+            // Retried rather than checked once: confirmed live (DEV-2026-001384,
+            // DEV-2026-001387 — two different dealers, same day) that a single immediate check
+            // produces a false negative often enough to matter — isDeviceOwnerApp() can return
+            // false for up to a second or two right after a genuinely successful
+            // set-device-owner, the exact same framework race FactoryResetProtection.kt's own
+            // comment already documents. A single-shot check here blocked the handshake outright
+            // on a phone that WAS actually Device Owner, and because the block happens before
+            // any network call, the backend saw zero trace of the attempt at all — indistinguishable
+            // from a phone that was never touched. Five attempts over four seconds is enough
+            // headroom for that race to resolve itself without making a genuinely-not-Device-Owner
+            // phone wait meaningfully longer to find that out.
+            val dpm = getApplication<Application>().getSystemService(android.content.Context.DEVICE_POLICY_SERVICE) as? android.app.admin.DevicePolicyManager
+            var isDeviceOwner = dpm?.isDeviceOwnerApp(getApplication<Application>().packageName) == true
+            var attempt = 1
+            while (!isDeviceOwner && attempt < 5) {
+                kotlinx.coroutines.delay(1000)
+                isDeviceOwner = dpm?.isDeviceOwnerApp(getApplication<Application>().packageName) == true
+                attempt++
+            }
+            if (!isDeviceOwner) {
+                isEnrolling = false
+                enrollmentError = "Device admin was not set up on this phone (Device Owner is missing). Enrolling now would leave Lock/Unlock broken. Go back to the dealer app and re-run Activate first — do not enter the OTP until that succeeds."
+                return@launch
+            }
+
             val result = repository.performHandshake(
                 enrollmentToken = enrollmentTokenInput.ifBlank { null },
                 otp = otpInput.ifBlank { null },
