@@ -88,6 +88,21 @@ class HeartbeatForegroundService : Service() {
     private suspend fun runLoop() {
         val tokenManager = TokenManager(applicationContext)
         while (scope.isActive) {
+            // Self-enforced notification timeout — see NotificationTimeoutScheduler's doc
+            // comment. The WorkManager one-time job it also schedules is subject to the exact
+            // same OEM battery-manager unreliability this foreground service exists to route
+            // around (confirmed live: notification still showing a full day after enrollment,
+            // not the configured ~2 hours), so this already-reliable 15-minute loop is the real
+            // enforcement point. A non-zero deadline that has passed means stop and exit —
+            // isEnrolled isn't rechecked here since a stale "still enrolled" flag is exactly
+            // what this deadline doesn't depend on.
+            val hideAt = tokenManager.getNotificationHideAt()
+            if (hideAt != 0L && System.currentTimeMillis() >= hideAt) {
+                tokenManager.clearNotificationHideAt()
+                stop(applicationContext)
+                break
+            }
+
             // Backstop for WifiStateEnforcer, same relationship CommandSync.fetchExecuteAck has
             // to FCM push below — a local check, so it runs regardless of whether a device token
             // exists yet.

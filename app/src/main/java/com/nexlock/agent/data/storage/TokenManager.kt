@@ -60,6 +60,22 @@ class TokenManager(context: Context) {
 
     fun isTermsAccepted(): Boolean = prefs.getBoolean(KEY_TERMS_ACCEPTED, false)
 
+    // The actual enforcement point for the persistent-notification timeout — see
+    // HeartbeatForegroundService.runLoop(), which checks this on its own 15-minute cycle rather
+    // than relying solely on NotificationTimeoutScheduler's WorkManager job to reach in from
+    // outside (that job shares the exact OEM-battery-killing unreliability this foreground
+    // service itself exists to route around — see HeartbeatForegroundService's own doc comment).
+    // 0L means "no deadline set" (not enrolled yet, or already stopped/cleared).
+    fun saveNotificationHideAt(hideAtMillis: Long) {
+        prefs.edit().putLong(KEY_NOTIFICATION_HIDE_AT, hideAtMillis).apply()
+    }
+
+    fun getNotificationHideAt(): Long = prefs.getLong(KEY_NOTIFICATION_HIDE_AT, 0L)
+
+    fun clearNotificationHideAt() {
+        prefs.edit().remove(KEY_NOTIFICATION_HIDE_AT).apply()
+    }
+
     fun clear() {
         prefs.edit().clear().apply()
     }
@@ -71,5 +87,6 @@ class TokenManager(context: Context) {
         private const val KEY_HEARTBEAT_INTERVAL = "key_heartbeat_interval"
         private const val KEY_IS_ENROLLED = "key_is_enrolled"
         private const val KEY_TERMS_ACCEPTED = "key_terms_accepted"
+        private const val KEY_NOTIFICATION_HIDE_AT = "key_notification_hide_at"
     }
 }
