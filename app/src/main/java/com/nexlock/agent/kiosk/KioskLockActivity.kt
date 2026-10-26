@@ -110,14 +110,35 @@ class KioskLockActivity : ComponentActivity() {
     }
 
     private fun configureLockScreenWindow() {
+        // Reported live (Samsung One UI, twice in one day): the screen enters a rapid on/off
+        // blink loop right as this activity pins via startLockTask(), persisting even after
+        // RELEASE_DEVICE — only a full factory reset clears it, not a reboot or uninstall. That
+        // survives-uninstall behavior points at Knox's own security-container state (separate
+        // from stock Android, not touched by removing this app), not something this app can
+        // clean up after the fact — so the real fix has to be not triggering it in the first
+        // place. setTurnScreenOn()/FLAG_TURN_SCREEN_ON forcing an immediate screen-on transition
+        // at the exact moment lock-task pinning engages is a known, documented conflict point
+        // with Samsung's own lock-screen/Always-On-Display transition animation; skipping it on
+        // Samsung specifically is the targeted fix. setShowWhenLocked alone is still enough to
+        // show over the lock screen without forcing that transition.
+        //
+        // NOT verified live on a real Samsung device (none available at the time of this fix) —
+        // reasoned from the reported symptom and this being a well-documented Android/Knox
+        // interaction, not confirmed by reproducing and re-testing it ourselves. Re-test on a
+        // real Samsung phone before trusting this fully; if the blinking still happens, this
+        // specific flag was not the actual cause and this guard should come back out.
+        val isSamsung = Build.MANUFACTURER.equals("samsung", ignoreCase = true)
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
-            setTurnScreenOn(true)
+            if (!isSamsung) {
+                setTurnScreenOn(true)
+            }
         } else {
             window.addFlags(
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                    (if (isSamsung) 0 else WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
             )
         }
     }
