@@ -2,6 +2,7 @@ package com.nexlock.agent.data.repository
 
 import com.nexlock.agent.data.api.NetworkModule
 import com.nexlock.agent.data.model.*
+import com.nexlock.agent.service.DeviceRestrictionPolicy
 
 class DeviceRepository {
 
@@ -130,6 +131,25 @@ class DeviceRepository {
             }
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    /**
+     * Best-effort — see DeviceRestrictionPolicy.applyBaselineRestrictions's own doc comment.
+     * Never throws outward: a diagnostic-submission failure must not surface as if enrollment
+     * itself failed, and nothing downstream needs to react to whether this succeeded.
+     */
+    suspend fun submitDiagnostics(deviceToken: String, context: String, steps: List<DeviceRestrictionPolicy.DiagStep>) {
+        try {
+            NetworkModule.apiService.submitDiagnostics(
+                "Bearer $deviceToken",
+                DiagnosticsRequest(
+                    context = context,
+                    steps = steps.map { DiagnosticStepPayload(it.step, it.ok, it.durationMs, it.error) }
+                )
+            )
+        } catch (e: Exception) {
+            // Swallowed deliberately — see doc comment above.
         }
     }
 

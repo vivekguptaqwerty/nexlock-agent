@@ -44,11 +44,37 @@ object DeviceRestrictionPolicy {
     // Still cleared explicitly below so devices enrolled by an older agent get it lifted too.
     private val LEGACY_RESTRICTIONS_TO_CLEAR = listOf(UserManager.DISALLOW_ADD_USER)
 
-    fun applyBaselineRestrictions(context: Context) {
+    /** One measured step in applyBaselineRestrictions()'s run — see its own doc comment and
+     * submitDiagnostics in DeviceRepository.kt for why this exists. `ok` only reflects whether
+     * the wrapped call threw, not whether the underlying DevicePolicyManager change actually
+     * stuck (most of these steps already self-catch and log internally, same as before this was
+     * added) — this is a timing/sequence trail first, an error trail second. */
+    data class DiagStep(val step: String, val ok: Boolean, val durationMs: Long, val error: String? = null)
+
+    private inline fun timed(name: String, log: MutableList<DiagStep>, block: () -> Unit) {
+        val start = System.currentTimeMillis()
+        try {
+            block()
+            log.add(DiagStep(name, true, System.currentTimeMillis() - start))
+        } catch (e: Exception) {
+            log.add(DiagStep(name, false, System.currentTimeMillis() - start, e.message))
+        }
+    }
+
+    /**
+     * Returns a step-by-step diagnostic trail of this run — built specifically to chase a
+     * screen-blink-right-after-enrollment issue reported live on Samsung and Oppo devices,
+     * never reproduced on a test device. Callers are expected to submit this trail via
+     * DeviceRepository#submitDiagnostics (best-effort, never blocking on it) rather than this
+     * function doing any networking itself.
+     */
+    fun applyBaselineRestrictions(context: Context): List<DiagStep> {
+        val log = mutableListOf<DiagStep>()
         val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as? DevicePolicyManager
         if (dpm == null) {
             Log.e(TAG, "DevicePolicyManager unavailable — cannot apply any restriction")
-            return
+            log.add(DiagStep("getDevicePolicyManager", false, 0, "service unavailable"))
+            return log
         }
         val admin = ComponentName(context, NexLockDeviceAdminReceiver::class.java)
 
@@ -61,47 +87,51 @@ object DeviceRestrictionPolicy {
         if (!isDeviceOwner) {
             Log.e(TAG, "Not Device Owner — skipping baseline restriction application entirely. " +
                 "This is the exact condition that would let factory-reset/uninstall/etc. through unblocked.")
-            return
+            log.add(DiagStep("isDeviceOwnerApp", false, 0, "not Device Owner"))
+            return log
         }
 
-        for (restriction in TARGET_RESTRICTIONS) {
-            applyRestriction(dpm, admin, restriction)
+        timed("applyTargetRestrictions", log) {
+            for (restriction in TARGET_RESTRICTIONS) {
+                applyRestriction(dpm, admin, restriction)
+            }
         }
-        for (restriction in LEGACY_RESTRICTIONS_TO_CLEAR) {
-            try {
-                dpm.clearUserRestriction(admin, restriction)
-                Log.i(TAG, "clearUserRestriction($restriction) completed")
-            } catch (e: Exception) {
-                Log.e(TAG, "clearUserRestriction($restriction) THREW", e)
+        timed("clearLegacyRestrictions", log) {
+            for (restriction in LEGACY_RESTRICTIONS_TO_CLEAR) {
+                try {
+                    dpm.clearUserRestriction(admin, restriction)
+                    Log.i(TAG, "clearUserRestriction($restriction) completed")
+                } catch (e: Exception) {
+                    Log.e(TAG, "clearUserRestriction($restriction) THREW", e)
+                }
             }
         }
 
-        try {
+        timed("setUninstallBlocked", log) {
             dpm.setUninstallBlocked(admin, context.packageName, true)
-        } catch (e: Exception) {
-            Log.e(TAG, "setUninstallBlocked failed", e)
         }
 
-        refreshLockTaskPackages(context, dpm, admin)
+        timed("refreshLockTaskPackages", log) {
+            refreshLockTaskPackages(context, dpm, admin)
+        }
 
-        try {
+        timed("setLockTaskFeatures", log) {
             // Minimal starting baseline (Open Decision #4 in the Phase 3 plan) — only
             // widened if real-hardware testing of the emergency-dialer path needs it.
             dpm.setLockTaskFeatures(admin, DevicePolicyManager.LOCK_TASK_FEATURE_NONE)
-        } catch (e: Exception) {
-            Log.e(TAG, "setLockTaskFeatures failed", e)
         }
 
-        applyUserControlLock(context, dpm, admin)
-        grantNotificationPermission(context, dpm, admin)
-        grantLocationAndPhonePermissions(context, dpm, admin)
-        grantBluetoothPermission(context, dpm, admin)
-        grantSystemAlertWindowPermission(context, dpm, admin)
-        activateFactoryResetProtection(dpm, admin)
-        disableAdbAndDeveloperOptions(dpm, admin)
-        writeDevelopmentSettingsFlagDirectly(context)
+        timed("applyUserControlLock", log) { applyUserControlLock(context, dpm, admin) }
+        timed("grantNotificationPermission", log) { grantNotificationPermission(context, dpm, admin) }
+        timed("grantLocationAndPhonePermissions", log) { grantLocationAndPhonePermissions(context, dpm, admin) }
+        timed("grantBluetoothPermission", log) { grantBluetoothPermission(context, dpm, admin) }
+        timed("grantSystemAlertWindowPermission", log) { grantSystemAlertWindowPermission(context, dpm, admin) }
+        timed("activateFactoryResetProtection", log) { activateFactoryResetProtection(dpm, admin) }
+        timed("disableAdbAndDeveloperOptions", log) { disableAdbAndDeveloperOptions(dpm, admin) }
+        timed("writeDevelopmentSettingsFlagDirectly", log) { writeDevelopmentSettingsFlagDirectly(context) }
+        timed("verifyAppliedRestrictions", log) { verifyAppliedRestrictions(context, dpm, admin) }
 
-        verifyAppliedRestrictions(context, dpm, admin)
+        return log
     }
 
     /**

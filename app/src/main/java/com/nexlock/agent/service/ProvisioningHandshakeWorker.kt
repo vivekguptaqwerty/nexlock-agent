@@ -64,7 +64,8 @@ class ProvisioningHandshakeWorker(
             heartbeatInterval = data.heartbeatInterval
         )
 
-        DeviceRestrictionPolicy.applyBaselineRestrictions(applicationContext)
+        val diagLog = DeviceRestrictionPolicy.applyBaselineRestrictions(applicationContext)
+        repository.submitDiagnostics(data.deviceToken, "qr_provisioning_handshake", diagLog)
         HeartbeatScheduler.schedule(applicationContext)
         HeartbeatForegroundService.start(applicationContext)
         NotificationTimeoutScheduler.schedule(applicationContext, data.notificationVisibilityMinutes)

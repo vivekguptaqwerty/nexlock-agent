@@ -6,9 +6,13 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import com.nexlock.agent.data.repository.DeviceRepository
 import com.nexlock.agent.data.storage.LockStateManager
 import com.nexlock.agent.data.storage.TokenManager
 import com.nexlock.agent.kiosk.KioskLockActivity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * Restores the Agent's session after a device reboot, without needing MainActivity to be
@@ -56,8 +60,20 @@ class BootReceiver : BroadcastReceiver() {
         // way to receive LOCK/UNLOCK/RELEASE_DEVICE until the app was somehow reopened by hand.
         // Each call is cheap and independent of the others, so one failing must not take the
         // rest down with it.
-        runCatching { DeviceRestrictionPolicy.applyBaselineRestrictions(context) }
-            .onFailure { Log.e(TAG, "applyBaselineRestrictions failed on boot", it) }
+        runCatching {
+            val diagLog = DeviceRestrictionPolicy.applyBaselineRestrictions(context)
+            val token = tokenManager.getDeviceToken()
+            if (token != null) {
+                // Fire-and-forget on its own IO-dispatcher coroutine — onReceive() itself stays
+                // synchronous (no goAsync()), consistent with every other step here; losing this
+                // one submission to the receiver's short execution window is an acceptable
+                // tradeoff for a best-effort diagnostic, same reasoning as DeviceRepository
+                // #submitDiagnostics itself never surfacing a failure.
+                CoroutineScope(Dispatchers.IO).launch {
+                    DeviceRepository().submitDiagnostics(token, "boot_reassert", diagLog)
+                }
+            }
+        }.onFailure { Log.e(TAG, "applyBaselineRestrictions failed on boot", it) }
         runCatching { WifiBlockManager.enforce(context) }
             .onFailure { Log.e(TAG, "WifiBlockManager.enforce failed on boot", it) }
         runCatching { BluetoothBlockManager.enforce(context) }

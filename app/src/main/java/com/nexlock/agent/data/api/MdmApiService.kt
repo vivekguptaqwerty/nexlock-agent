@@ -34,6 +34,12 @@ interface MdmApiService {
         @Header("Authorization") bearerToken: String
     ): Response<ApiResponse<LockInfoData>>
 
+    @POST("api/v1/mdm/devices/me/diagnostics")
+    suspend fun submitDiagnostics(
+        @Header("Authorization") bearerToken: String,
+        @Body request: DiagnosticsRequest
+    ): Response<ApiResponse<Any>>
+
     // Public — fetched before the enrollment handshake, when there's no device token yet.
     @GET("api/v1/legal/privacy-policy")
     suspend fun getPrivacyPolicy(): Response<ApiResponse<LegalContentData>>

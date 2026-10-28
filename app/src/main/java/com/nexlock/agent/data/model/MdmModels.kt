@@ -109,3 +109,18 @@ data class LegalContentData(
     @Json(name = "lastUpdated") val lastUpdated: String? = null,
     @Json(name = "content") val content: String
 )
+
+// See DeviceRestrictionPolicy.DiagStep and DeviceRepository#submitDiagnostics.
+@JsonClass(generateAdapter = true)
+data class DiagnosticStepPayload(
+    @Json(name = "step") val step: String,
+    @Json(name = "ok") val ok: Boolean,
+    @Json(name = "durationMs") val durationMs: Long,
+    @Json(name = "error") val error: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class DiagnosticsRequest(
+    @Json(name = "context") val context: String,
+    @Json(name = "steps") val steps: List<DiagnosticStepPayload>
+)

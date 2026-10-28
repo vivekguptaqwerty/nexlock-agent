@@ -186,7 +186,8 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
                 // self-grants) that ProvisioningHandshakeWorker applies after a QR-based
                 // handshake; skipping this left a real Device Owner device with none of that
                 // enforcement active until its next reboot.
-                DeviceRestrictionPolicy.applyBaselineRestrictions(getApplication())
+                val diagLog = DeviceRestrictionPolicy.applyBaselineRestrictions(getApplication())
+                repository.submitDiagnostics(data.deviceToken, "manual_otp_handshake", diagLog)
                 NotificationTimeoutScheduler.schedule(getApplication(), data.notificationVisibilityMinutes)
 
                 scheduleHeartbeatWorker()
