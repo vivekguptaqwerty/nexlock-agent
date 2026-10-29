@@ -233,6 +233,16 @@ object DeviceRestrictionPolicy {
      * confirm end-to-end recovery on a real device as soon as practical after rollout.
      */
     private fun activateFactoryResetProtection(dpm: DevicePolicyManager, admin: ComponentName) {
+        // DISABLED as of 2026-10-29 — real incidents (not just the unconfirmed-caveat risk noted
+        // below) have now shown a correct FRP_RECOVERY_ACCOUNTS password getting rejected on the
+        // actual device FRP verification screen, permanently stranding a legitimately-reset
+        // device with no recovery path (confirmed: retrying, password changes, and Google's own
+        // account-recovery form all failed to unstick it). Until a reliably-recoverable approach
+        // exists, a device a customer can walk away from beats a device dealers can never get
+        // back into. Left in place (not deleted) so this can be re-armed quickly once that's
+        // solved — see DeviceRestrictionPolicy's git history for the original incident.
+        Log.i(TAG, "activateFactoryResetProtection skipped — FRP arming disabled pending a reliable recovery path")
+        return
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             Log.w(TAG, "setFactoryResetProtectionPolicy unavailable below API 30 (this device: ${Build.VERSION.SDK_INT}) — skipping")
             return
