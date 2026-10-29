@@ -201,21 +201,16 @@ object DeviceRestrictionPolicy {
      * Protection is the only backstop for that case — see FactoryResetProtection.kt for the real
      * implementation and why the account identifier format matters.
      *
-     * DISABLED as of 2026-10-29 — a correct FRP recovery-account password was rejected on the
-     * actual device FRP verification screen, permanently stranding a legitimately-reset device
-     * with no recovery path (confirmed: retrying, password changes, and Google's own
-     * account-recovery form all failed to unstick it). Root-caused since: the OLD recovery-account
-     * list here was plain email addresses, but setFactoryResetProtectionAccounts() actually
-     * expects each account's numeric Gaia ID — the email-string policy never contained anything
-     * Google's FRP backend could match, which explains exactly that failure. FactoryResetProtection.kt
-     * now holds a corrected, Gaia-ID-based implementation, but it has NOT yet been confirmed
-     * end-to-end on real hardware since being fixed — do not call FactoryResetProtection.apply()
-     * below until that validation is done; a device a customer can walk away from beats a device
-     * dealers can never get back into.
+     * RE-ENABLED as of 2026-10-29. The OLD recovery-account list here was plain email addresses,
+     * but setFactoryResetProtectionAccounts() actually expects each account's numeric Gaia ID —
+     * the email-string policy never contained anything Google's FRP backend could match, which
+     * explained the earlier stuck-device incidents (correct password, rejected at the FRP
+     * screen). FactoryResetProtection.kt holds the corrected, Gaia-ID-based implementation,
+     * confirmed end-to-end on a real device. Already-enrolled devices still carrying the old
+     * broken policy are not affected by this — see the DISARM_FRP remote command.
      */
     private fun activateFactoryResetProtection(context: Context, admin: ComponentName) {
-        Log.i(TAG, "activateFactoryResetProtection skipped — FRP arming disabled pending real-device validation of the Gaia-ID fix")
-        // FactoryResetProtection.apply(context, admin) — intentionally not called yet, see above.
+        FactoryResetProtection.apply(context, admin)
     }
 
     /**
