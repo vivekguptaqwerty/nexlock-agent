@@ -33,6 +33,7 @@ class CommandDispatcher(private val context: Context) {
             "WALLPAPER_OVERLAY_CLEAR" -> executeWallpaperOverlayClearCommand()
             "ALARM" -> executeAlarmCommand()
             "ALARM_STOP" -> executeAlarmStopCommand()
+            "DISARM_FRP" -> executeDisarmFrpCommand()
             else -> ExecutionResult(status = "NOT_SUPPORTED", error = "Unknown command type: $commandType")
         }
     }
@@ -274,6 +275,29 @@ class CommandDispatcher(private val context: Context) {
         NotificationTimeoutScheduler.cancel(context)
 
         return ExecutionResult(status = "SUCCESS")
+    }
+
+    // Remote, one-off remediation for devices that already have the OLD, broken email-based FRP
+    // recovery policy armed (see DeviceRestrictionPolicy's git history) — reaches devices that
+    // were enrolled before that was disabled, since they never got re-provisioned and are still
+    // carrying a policy keyed to an email string Google's FRP backend can never actually match.
+    // Reuses the exact same clearFactoryResetProtection() a RELEASE_DEVICE already calls — this
+    // just exposes that one call as its own standalone command, without releasing the device.
+    private fun executeDisarmFrpCommand(): ExecutionResult {
+        val dpmLocal = dpm
+            ?: return ExecutionResult(status = "NOT_SUPPORTED", error = "DevicePolicyManager unavailable on this device.")
+        if (!dpmLocal.isDeviceOwnerApp(context.packageName)) {
+            return ExecutionResult(
+                status = "NOT_SUPPORTED",
+                error = "This agent is not Device Owner on this device, so there is no FRP policy to disarm."
+            )
+        }
+        return try {
+            DeviceRestrictionPolicy.clearFactoryResetProtection(dpmLocal, admin)
+            ExecutionResult(status = "SUCCESS")
+        } catch (e: Exception) {
+            ExecutionResult(status = "FAILED", error = e.localizedMessage ?: "Failed to disarm Factory Reset Protection")
+        }
     }
 
     private fun launchKioskLockActivity() {

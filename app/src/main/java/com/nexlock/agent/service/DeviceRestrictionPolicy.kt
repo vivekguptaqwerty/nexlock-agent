@@ -319,7 +319,10 @@ object DeviceRestrictionPolicy {
      * Device Owner is cleared this app has no privilege left to touch FRP at all, and a fully
      * paid-off customer's own phone must not stay locked behind a policy nobody can lift anymore.
      */
-    private fun clearFactoryResetProtection(dpm: DevicePolicyManager, admin: ComponentName) {
+    // Not private — CommandDispatcher's DISARM_FRP case calls this directly, as a standalone
+    // remote remediation for devices already carrying the old broken email-based FRP policy,
+    // separate from the full RELEASE_DEVICE flow that also calls it.
+    fun clearFactoryResetProtection(dpm: DevicePolicyManager, admin: ComponentName) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
         try {
             dpm.setFactoryResetProtectionPolicy(admin, null)
