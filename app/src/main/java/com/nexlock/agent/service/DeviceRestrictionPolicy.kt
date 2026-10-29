@@ -22,17 +22,6 @@ object DeviceRestrictionPolicy {
 
     private const val TAG = "DeviceRestrictionPolicy"
 
-    // The accounts that can pass Factory Reset Protection after a recovery-mode wipe — see
-    // activateFactoryResetProtection. Deliberately just the emails, never passwords: the app
-    // never signs into either account itself, it only tells Android which accounts FRP should
-    // accept. The password is an operational credential typed by a human (dealer/admin) into
-    // the phone's own FRP screen during a real recovery — it has no reason to exist in this
-    // codebase and must never be added here.
-    // Two accounts, either one works (setFactoryResetProtectionAccounts takes a list, not just a
-    // single account): the company-controlled account is primary for real recovery operations,
-    // with the personal account kept as a backup in case the company account is ever inaccessible.
-    private val FRP_RECOVERY_ACCOUNTS = listOf("it@nexusdig.in", "vivekg3216@gmail.com")
-
     private val TARGET_RESTRICTIONS = listOf(
         UserManager.DISALLOW_FACTORY_RESET,
         UserManager.DISALLOW_DEBUGGING_FEATURES,
@@ -126,7 +115,7 @@ object DeviceRestrictionPolicy {
         timed("grantLocationAndPhonePermissions", log) { grantLocationAndPhonePermissions(context, dpm, admin) }
         timed("grantBluetoothPermission", log) { grantBluetoothPermission(context, dpm, admin) }
         timed("grantSystemAlertWindowPermission", log) { grantSystemAlertWindowPermission(context, dpm, admin) }
-        timed("activateFactoryResetProtection", log) { activateFactoryResetProtection(dpm, admin) }
+        timed("activateFactoryResetProtection", log) { activateFactoryResetProtection(context, admin) }
         timed("disableAdbAndDeveloperOptions", log) { disableAdbAndDeveloperOptions(dpm, admin) }
         timed("writeDevelopmentSettingsFlagDirectly", log) { writeDevelopmentSettingsFlagDirectly(context) }
         timed("verifyAppliedRestrictions", log) { verifyAppliedRestrictions(context, dpm, admin) }
@@ -208,55 +197,25 @@ object DeviceRestrictionPolicy {
      * DISALLOW_FACTORY_RESET (above) only blocks the in-Settings "Erase all data" UI — it has no
      * effect on a recovery-mode wipe triggered by the hardware button combo (Volume Up + Power on
      * most OEMs), which happens in the bootloader before Android, and therefore before this app,
-     * is even running. Nothing running as an Android app can intercept that.
+     * is even running. Nothing running as an Android app can intercept that. Factory Reset
+     * Protection is the only backstop for that case — see FactoryResetProtection.kt for the real
+     * implementation and why the account identifier format matters.
      *
-     * What IS reachable: what happens to the device AFTER that wipe completes. Normal Factory
-     * Reset Protection (FRP) is keyed off whether a Google account was present before the reset —
-     * but Device Owner provisioning requires the opposite (zero accounts on the device), so FRP
-     * was never actually armed on these phones, and a recovery-mode wipe left them as clean,
-     * unlocked phones with zero protection. setFactoryResetProtectionPolicy (API 30+) lets a
-     * Device Owner arm FRP itself, requiring one of FRP_RECOVERY_ACCOUNTS specifically (not an
-     * empty enterprise policy — deliberately the well-documented, universally-implemented
-     * consumer FRP path: "sign in with a Google account previously used on this device") so a
-     * wiped device comes up locked to one of those NexLock-controlled accounts instead of being
-     * immediately usable. A dealer recovering a legitimately-reset device signs into one of
-     * FRP_RECOVERY_ACCOUNTS on that screen, then re-provisions Device Owner normally from there
-     * (QR or the Activator).
-     *
-     * NOTE: as of the last real-hardware test on this path (v1.0.17-test, on-screen diagnostic),
-     * this had not yet been conclusively confirmed end-to-end — specifically (1) that a
-     * recovery-mode wipe actually triggers this screen and rejects any account not in the list,
-     * and (2) that completing that Google sign-in doesn't itself block the subsequent Device
-     * Owner re-provisioning step (which normally requires zero accounts on the device —
-     * unverified whether Setup Wizard's own FRP-mandated sign-in is exempt from that check).
-     * Shipping this to production is a deliberate decision made with that caveat still open —
-     * confirm end-to-end recovery on a real device as soon as practical after rollout.
+     * DISABLED as of 2026-10-29 — a correct FRP recovery-account password was rejected on the
+     * actual device FRP verification screen, permanently stranding a legitimately-reset device
+     * with no recovery path (confirmed: retrying, password changes, and Google's own
+     * account-recovery form all failed to unstick it). Root-caused since: the OLD recovery-account
+     * list here was plain email addresses, but setFactoryResetProtectionAccounts() actually
+     * expects each account's numeric Gaia ID — the email-string policy never contained anything
+     * Google's FRP backend could match, which explains exactly that failure. FactoryResetProtection.kt
+     * now holds a corrected, Gaia-ID-based implementation, but it has NOT yet been confirmed
+     * end-to-end on real hardware since being fixed — do not call FactoryResetProtection.apply()
+     * below until that validation is done; a device a customer can walk away from beats a device
+     * dealers can never get back into.
      */
-    private fun activateFactoryResetProtection(dpm: DevicePolicyManager, admin: ComponentName) {
-        // DISABLED as of 2026-10-29 — real incidents (not just the unconfirmed-caveat risk noted
-        // below) have now shown a correct FRP_RECOVERY_ACCOUNTS password getting rejected on the
-        // actual device FRP verification screen, permanently stranding a legitimately-reset
-        // device with no recovery path (confirmed: retrying, password changes, and Google's own
-        // account-recovery form all failed to unstick it). Until a reliably-recoverable approach
-        // exists, a device a customer can walk away from beats a device dealers can never get
-        // back into. Left in place (not deleted) so this can be re-armed quickly once that's
-        // solved — see DeviceRestrictionPolicy's git history for the original incident.
-        Log.i(TAG, "activateFactoryResetProtection skipped — FRP arming disabled pending a reliable recovery path")
-        return
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            Log.w(TAG, "setFactoryResetProtectionPolicy unavailable below API 30 (this device: ${Build.VERSION.SDK_INT}) — skipping")
-            return
-        }
-        try {
-            val policy = android.app.admin.FactoryResetProtectionPolicy.Builder()
-                .setFactoryResetProtectionAccounts(FRP_RECOVERY_ACCOUNTS)
-                .setFactoryResetProtectionEnabled(true)
-                .build()
-            dpm.setFactoryResetProtectionPolicy(admin, policy)
-            Log.i(TAG, "setFactoryResetProtectionPolicy applied (enabled=true, accounts=$FRP_RECOVERY_ACCOUNTS)")
-        } catch (e: Exception) {
-            Log.e(TAG, "setFactoryResetProtectionPolicy failed", e)
-        }
+    private fun activateFactoryResetProtection(context: Context, admin: ComponentName) {
+        Log.i(TAG, "activateFactoryResetProtection skipped — FRP arming disabled pending real-device validation of the Gaia-ID fix")
+        // FactoryResetProtection.apply(context, admin) — intentionally not called yet, see above.
     }
 
     /**
