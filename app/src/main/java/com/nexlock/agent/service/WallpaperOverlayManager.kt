@@ -91,7 +91,20 @@ object WallpaperOverlayManager {
             // have no API to read back a previous third-party wallpaper once it's been
             // overwritten. Resets to a plain neutral color instead of leaving the alarming
             // red/white message in place after the dealer clears it.
-            val bitmap = Bitmap.createBitmap(4, 4, Bitmap.Config.ARGB_8888)
+            //
+            // MUST be full screen resolution, not a tiny placeholder — a 4x4 bitmap here
+            // (the previous implementation) crashed Oppo's launcher in a tight loop
+            // (com.android.launcher's own wallpaper-effects pipeline calls
+            // Bitmap.getPixels() against real screen coordinates, which throws
+            // "y + height must be <= bitmap.height()" against a 4x4 source), confirmed via a
+            // live adb logcat capture on a real device — this is the root cause of the
+            // screen-blinking-after-enrollment bug investigated at length this session, not an
+            // OEM/OS-level quirk. Every OEM launcher that does wallpaper-derived rendering
+            // (blur, AOD, icon theming) was at risk of this, not just Oppo.
+            val dm = context.resources.displayMetrics
+            val width = dm.widthPixels.coerceAtLeast(720)
+            val height = dm.heightPixels.coerceAtLeast(1280)
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             bitmap.eraseColor(Color.parseColor("#E6F4FE"))
             WallpaperManager.getInstance(context).setBitmap(bitmap)
         } catch (e: Exception) {

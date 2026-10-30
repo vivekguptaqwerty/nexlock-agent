@@ -73,29 +73,25 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Self-heals a stale local enrollment — see DeviceRepository.checkDeviceTokenStillValid's
-     * doc comment for the root cause (DEV-2026-001384/001387): a phone reused for a new
-     * customer without ever being Released first shows isEnrolled=true forever, from a prior
-     * enrollment, with no backend-side Device row left to match it — the OTP screen for the new
-     * customer never even appears, since isEnrolled alone decides what MainActivity shows.
-     * A 401 specifically means the backend has no idea what this token is anymore (the Device
-     * row is gone or was never this one); only then is it safe to drop back to the enrollment
-     * form. Any other outcome (network failure, 5xx, no connectivity) leaves everything exactly
-     * as it was — a phone that's genuinely still enrolled and locked must never lose that
-     * protection just because of a bad network moment.
+     * DISABLED as of 2026-10-30 — this was built to self-heal one specific case (a phone reused
+     * for a new customer without ever being Released, DEV-2026-001384/001387) by treating a 401
+     * from checkDeviceTokenStillValid as proof "the backend has no idea what this token is
+     * anymore." That assumption just proved false in the worst possible way: rotating
+     * JWT_SECRET on the backend (a routine credential fix, unrelated to this device) made
+     * deviceAuthMiddleware reject every pre-existing device token with a 401, and this code
+     * treated that identically to a legitimately-released device — silently clearing local
+     * enrollment AND unlocking the device (setLocked(false)) for every phone whose app process
+     * happened to reinitialize afterward. A 401 cannot actually distinguish "this token is
+     * gone because the device was released" from "this token is gone because something changed
+     * server-side" — there is no safe way to act on it destructively. Until a more specific
+     * signal exists (e.g. the backend explicitly flagging "this device was reused"), doing
+     * nothing on any failure — exactly like a network error or 5xx already does — is the only
+     * safe default: a phone that's genuinely still enrolled and locked must never lose that
+     * protection because of what the backend did, not what the phone did.
      */
     private fun validateStoredEnrollment() {
-        val token = tokenManager.getDeviceToken()
-        if (token.isNullOrBlank()) return
-        viewModelScope.launch {
-            if (repository.checkDeviceTokenStillValid(token) == 401) {
-                TokenManager(getApplication()).clear()
-                com.nexlock.agent.data.storage.LockStateManager(getApplication()).setLocked(false)
-                isEnrolled = false
-                deviceId = ""
-                deviceToken = ""
-            }
-        }
+        // Intentionally a no-op now — see the doc comment above. Left in place (not deleted) as
+        // the hook for a future, properly-scoped version of this self-heal.
     }
 
     fun performHandshake() {
