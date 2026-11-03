@@ -34,6 +34,8 @@ class CommandDispatcher(private val context: Context) {
             "ALARM" -> executeAlarmCommand()
             "ALARM_STOP" -> executeAlarmStopCommand()
             "DISARM_FRP" -> executeDisarmFrpCommand()
+            "DEV_MODE_ENABLE" -> executeDevModeCommand(enabled = true)
+            "DEV_MODE_DISABLE" -> executeDevModeCommand(enabled = false)
             else -> ExecutionResult(status = "NOT_SUPPORTED", error = "Unknown command type: $commandType")
         }
     }
@@ -297,6 +299,23 @@ class CommandDispatcher(private val context: Context) {
             ExecutionResult(status = "SUCCESS")
         } catch (e: Exception) {
             ExecutionResult(status = "FAILED", error = e.localizedMessage ?: "Failed to disarm Factory Reset Protection")
+        }
+    }
+
+    private fun executeDevModeCommand(enabled: Boolean): ExecutionResult {
+        val dpmLocal = dpm
+            ?: return ExecutionResult(status = "NOT_SUPPORTED", error = "DevicePolicyManager unavailable on this device.")
+        if (!dpmLocal.isDeviceOwnerApp(context.packageName)) {
+            return ExecutionResult(
+                status = "NOT_SUPPORTED",
+                error = "This agent is not Device Owner on this device, so there is no restriction to toggle."
+            )
+        }
+        return try {
+            DeviceRestrictionPolicy.setDevModeEnabled(context, dpmLocal, admin, enabled)
+            ExecutionResult(status = "SUCCESS")
+        } catch (e: Exception) {
+            ExecutionResult(status = "FAILED", error = e.localizedMessage ?: "Failed to toggle Developer Options")
         }
     }
 

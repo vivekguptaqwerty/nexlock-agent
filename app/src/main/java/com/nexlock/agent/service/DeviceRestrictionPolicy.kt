@@ -176,20 +176,55 @@ object DeviceRestrictionPolicy {
      * silently no-ops (logged, not crashing) until the dealer re-runs activation against that
      * phone to pick up the grant — `pm grant` doesn't require the app to not already be Device
      * Owner, so re-running activation is a safe, idempotent repair for already-enrolled devices.
+     *
+     * Deliberately throws on failure instead of swallowing it — this runs inside applyBaselineRestrictions()'s
+     * timed() wrapper, which only records a step as failed if it throws. Silently catching here (the previous
+     * behavior) meant this step was ALWAYS reported as successful in the diagnostic trail submitted to the
+     * backend, even when the permission was missing — exactly the case this diagnostic trail exists to catch.
      */
     private fun writeDevelopmentSettingsFlagDirectly(context: Context) {
         val granted = context.checkSelfPermission(android.Manifest.permission.WRITE_SECURE_SETTINGS) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
         if (!granted) {
-            Log.e(TAG, "WRITE_SECURE_SETTINGS not granted — cannot clear DEVELOPMENT_SETTINGS_ENABLED directly. " +
-                "This device needs activation re-run to pick up the pm grant step.")
+            throw IllegalStateException(
+                "WRITE_SECURE_SETTINGS not granted — device needs activation re-run to pick up the pm grant step."
+            )
+        }
+        Settings.Global.putInt(context.contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0)
+        Log.i(TAG, "Forced Settings.Global.DEVELOPMENT_SETTINGS_ENABLED to 0 directly (WRITE_SECURE_SETTINGS)")
+    }
+
+    /**
+     * Admin-only remote toggle (DEV_MODE_ENABLE/DEV_MODE_DISABLE — see CommandDispatcher) that
+     * reverses or re-applies the enrollment-time Developer Options lockdown on demand, e.g. so
+     * support can get ADB access back onto a specific device for troubleshooting without a
+     * factory reset. The two DPM calls (restriction + ADB_ENABLED) are the critical path and
+     * propagate failure normally — a real failure here should fail the command. The direct
+     * Settings.Global write is the same WRITE_SECURE_SETTINGS-gated best-effort piece as
+     * writeDevelopmentSettingsFlagDirectly above (cosmetic: hides/shows the Developer Options
+     * menu itself) — its absence doesn't block ADB access, so it's caught and logged here rather
+     * than failing the whole toggle.
+     */
+    fun setDevModeEnabled(context: Context, dpm: DevicePolicyManager, admin: ComponentName, enabled: Boolean) {
+        if (enabled) {
+            dpm.clearUserRestriction(admin, UserManager.DISALLOW_DEBUGGING_FEATURES)
+        } else {
+            dpm.addUserRestriction(admin, UserManager.DISALLOW_DEBUGGING_FEATURES)
+        }
+        dpm.setGlobalSetting(admin, Settings.Global.ADB_ENABLED, if (enabled) "1" else "0")
+        Log.i(TAG, "setDevModeEnabled($enabled): restriction + ADB_ENABLED applied")
+
+        val granted = context.checkSelfPermission(android.Manifest.permission.WRITE_SECURE_SETTINGS) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            Log.e(TAG, "setDevModeEnabled($enabled): WRITE_SECURE_SETTINGS not granted — ADB access toggled, " +
+                "but the Developer Options menu itself won't reflect it until activation is re-run.")
             return
         }
         try {
-            Settings.Global.putInt(context.contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0)
-            Log.i(TAG, "Forced Settings.Global.DEVELOPMENT_SETTINGS_ENABLED to 0 directly (WRITE_SECURE_SETTINGS)")
+            Settings.Global.putInt(context.contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, if (enabled) 1 else 0)
         } catch (e: Exception) {
-            Log.e(TAG, "Direct Settings.Global.putInt(DEVELOPMENT_SETTINGS_ENABLED) failed", e)
+            Log.e(TAG, "setDevModeEnabled($enabled): direct DEVELOPMENT_SETTINGS_ENABLED write failed", e)
         }
     }
 
