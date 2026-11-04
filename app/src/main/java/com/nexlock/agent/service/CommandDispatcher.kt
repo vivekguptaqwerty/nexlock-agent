@@ -36,6 +36,7 @@ class CommandDispatcher(private val context: Context) {
             "DISARM_FRP" -> executeDisarmFrpCommand()
             "DEV_MODE_ENABLE" -> executeDevModeCommand(enabled = true)
             "DEV_MODE_DISABLE" -> executeDevModeCommand(enabled = false)
+            "RESTART_SYNC_SERVICE" -> executeRestartSyncServiceCommand()
             else -> ExecutionResult(status = "NOT_SUPPORTED", error = "Unknown command type: $commandType")
         }
     }
@@ -316,6 +317,39 @@ class CommandDispatcher(private val context: Context) {
             ExecutionResult(status = "SUCCESS")
         } catch (e: Exception) {
             ExecutionResult(status = "FAILED", error = e.localizedMessage ?: "Failed to toggle Developer Options")
+        }
+    }
+
+    /**
+     * Remote remediation for HeartbeatForegroundService having been killed by an OEM battery
+     * manager — confirmed live (DEV-2026-002561): the device was still reachable (heartbeats kept
+     * landing via the separate WorkManager fallback), but its post-enrollment notification stayed
+     * stuck well past the 2-hour timeout because the foreground service whose own 15-minute loop
+     * enforces that deadline wasn't actually running. stop() first, not just start(), so this is a
+     * real restart rather than a no-op touch if the service is in some other stuck-but-not-fully-
+     * dead state — HeartbeatForegroundService.start() alone already guards against double-starting
+     * its loop job, which would otherwise make a plain start() do nothing for an already-alive
+     * instance stuck for a different reason.
+     *
+     * This handler running at all is itself evidence delivery worked — if the whole process were
+     * truly unreachable (not just this one service), the FCM push that triggers
+     * CommandSync.fetchExecuteAck's dispatch to this method would never have landed either.
+     */
+    private fun executeRestartSyncServiceCommand(): ExecutionResult {
+        val dpmLocal = dpm
+            ?: return ExecutionResult(status = "NOT_SUPPORTED", error = "DevicePolicyManager unavailable on this device.")
+        if (!dpmLocal.isDeviceOwnerApp(context.packageName)) {
+            return ExecutionResult(
+                status = "NOT_SUPPORTED",
+                error = "This agent is not Device Owner on this device, so there is no sync service to restart."
+            )
+        }
+        return try {
+            HeartbeatForegroundService.stop(context)
+            HeartbeatForegroundService.start(context)
+            ExecutionResult(status = "SUCCESS")
+        } catch (e: Exception) {
+            ExecutionResult(status = "FAILED", error = e.localizedMessage ?: "Failed to restart the sync service")
         }
     }
 
