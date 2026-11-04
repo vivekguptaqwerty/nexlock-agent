@@ -46,4 +46,12 @@ interface MdmApiService {
 
     @GET("api/v1/legal/terms")
     suspend fun getTerms(): Response<ApiResponse<LegalContentData>>
+
+    // Deliberately unauthenticated — see ForceCommandController.acknowledgeForceCommand on the
+    // backend. This is the one call in this whole file that a device with a dead/invalid token
+    // can still make, by design: the one-time ackToken in the body is the authentication.
+    @POST("api/v1/mdm/force-commands/ack")
+    suspend fun acknowledgeForceCommand(
+        @Body request: ForceCommandAckRequest
+    ): Response<ApiResponse<Any>>
 }

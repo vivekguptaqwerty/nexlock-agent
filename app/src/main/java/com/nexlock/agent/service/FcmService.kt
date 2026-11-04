@@ -31,6 +31,59 @@ class FcmService : FirebaseMessagingService() {
                 message.data["title"] ?: "Payment Reminder — NexLock",
                 message.data["body"] ?: "Your EMI payment is due."
             )
+            "FORCE_LOCK", "FORCE_UNLOCK", "FORCE_RELEASE" ->
+                handleForceCommand(message.data["type"]!!, message.data["deviceId"], message.data["ackToken"])
+            "FORCE_REENROLL" ->
+                handleForceReenroll(message.data["deviceId"], message.data["ackToken"])
+        }
+    }
+
+    /**
+     * Emergency remediation path — see ForceCommand's schema comment on the backend for the
+     * full incident this exists for (a device with a dead JWT from the 2026-10-29 rotation,
+     * unreachable through handleCommandAvailable()'s normal fetch -> execute -> ack flow since
+     * every step of that requires the token that's dead). Executes directly via the same,
+     * already-proven CommandDispatcher used for every normal LOCK/UNLOCK/RELEASE_DEVICE command
+     * — nothing new or untested in the execution itself, only in how it was triggered and how
+     * the result gets confirmed back (acknowledgeForceCommand, not the normal device-token-
+     * authenticated ack call).
+     */
+    private fun handleForceCommand(pushType: String, deviceId: String?, ackToken: String?) {
+        if (deviceId.isNullOrBlank() || ackToken.isNullOrBlank()) return
+        val commandType = when (pushType) {
+            "FORCE_LOCK" -> "LOCK"
+            "FORCE_UNLOCK" -> "UNLOCK"
+            "FORCE_RELEASE" -> "RELEASE_DEVICE"
+            else -> return
+        }
+        CoroutineScope(Dispatchers.IO).launch {
+            val dispatcher = CommandDispatcher(applicationContext)
+            val result = dispatcher.executeCommand(commandType)
+            repository.acknowledgeForceCommand(deviceId, ackToken, result.status, result.error)
+        }
+    }
+
+    /**
+     * Clears ONLY the dead enrollment token — deliberately never touches LockStateManager/lock
+     * state, which is the one-line difference from the self-heal bug this is explicitly designed
+     * not to repeat (see AgentViewModel.validateStoredEnrollment's doc comment and EMERGENCY
+     * commit 8ebc8c3). TokenManager and LockStateManager are separate SharedPreferences files —
+     * this cannot reach lock state even by accident. Relaunches MainActivity so it re-reads the
+     * now-cleared local state immediately and shows the OTP entry screen, rather than waiting
+     * for whatever happens to bring the app back to the foreground next.
+     */
+    private fun handleForceReenroll(deviceId: String?, ackToken: String?) {
+        TokenManager(applicationContext).clear()
+
+        val intent = Intent(applicationContext, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        applicationContext.startActivity(intent)
+
+        if (!deviceId.isNullOrBlank() && !ackToken.isNullOrBlank()) {
+            CoroutineScope(Dispatchers.IO).launch {
+                repository.acknowledgeForceCommand(deviceId, ackToken, "SUCCESS")
+            }
         }
     }
 

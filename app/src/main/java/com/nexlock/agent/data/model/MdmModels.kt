@@ -94,6 +94,14 @@ data class AckRequest(
 )
 
 @JsonClass(generateAdapter = true)
+data class ForceCommandAckRequest(
+    @Json(name = "deviceId") val deviceId: String,
+    @Json(name = "ackToken") val ackToken: String,
+    @Json(name = "result") val result: String,
+    @Json(name = "error") val error: String? = null
+)
+
+@JsonClass(generateAdapter = true)
 data class LockInfoData(
     @Json(name = "lockReason") val lockReason: String,
     @Json(name = "dealerName") val dealerName: String? = null,

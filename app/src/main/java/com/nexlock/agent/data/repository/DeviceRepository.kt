@@ -154,6 +154,24 @@ class DeviceRepository {
     }
 
     /**
+     * Confirms execution of a ForceCommand (FORCE_LOCK/UNLOCK/RELEASE/REENROLL) — see
+     * ForceCommandController on the backend. Deliberately no Authorization header at all: this
+     * is called precisely when the device's own token is dead, which is the entire reason the
+     * backend route itself takes no auth and trusts the one-time ackToken instead. Best-effort,
+     * same as submitDiagnostics above — if this fails to reach the backend, the execution itself
+     * already happened locally regardless; losing the confirmation doesn't undo that.
+     */
+    suspend fun acknowledgeForceCommand(deviceId: String, ackToken: String, result: String, error: String? = null) {
+        try {
+            NetworkModule.apiService.acknowledgeForceCommand(
+                ForceCommandAckRequest(deviceId = deviceId, ackToken = ackToken, result = result, error = error)
+            )
+        } catch (e: Exception) {
+            // Swallowed deliberately — see doc comment above.
+        }
+    }
+
+    /**
      * Checks whether a locally-stored device token still corresponds to a real, current
      * enrollment on the backend — deviceAuthMiddleware returns 401 for a token whose Device row
      * doesn't exist or was soft-deleted (DEV-2026-001384/001387's root cause: a phone reused for
