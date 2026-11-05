@@ -80,6 +80,20 @@ class TokenManager(context: Context) {
         prefs.edit().clear().apply()
     }
 
+    // Admin-only, per-device override (DISABLE_SYNC_SERVICE/ENABLE_SYNC_SERVICE — see
+    // CommandDispatcher) — deliberately checked inside HeartbeatForegroundService.start() itself
+    // rather than at each of its four call sites, so nothing (BootReceiver, a future command, a
+    // future call site someone adds later) can accidentally restart the service against an
+    // explicit admin decision to keep it off for this device. Trades away this device's most
+    // reliable LOCK/UNLOCK delivery path and Wi-Fi/wallpaper self-healing for a fully silent
+    // device — the two remaining paths (WorkManager periodic job, FCM push) stay active
+    // regardless, so this is reduced reliability, not a full loss of remote control.
+    fun setSyncServiceDisabled(disabled: Boolean) {
+        prefs.edit().putBoolean(KEY_SYNC_SERVICE_DISABLED, disabled).apply()
+    }
+
+    fun isSyncServiceDisabled(): Boolean = prefs.getBoolean(KEY_SYNC_SERVICE_DISABLED, false)
+
     companion object {
         private const val KEY_DEVICE_TOKEN = "key_device_token"
         private const val KEY_DEVICE_ID = "key_device_id"
@@ -88,5 +102,6 @@ class TokenManager(context: Context) {
         private const val KEY_IS_ENROLLED = "key_is_enrolled"
         private const val KEY_TERMS_ACCEPTED = "key_terms_accepted"
         private const val KEY_NOTIFICATION_HIDE_AT = "key_notification_hide_at"
+        private const val KEY_SYNC_SERVICE_DISABLED = "key_sync_service_disabled"
     }
 }

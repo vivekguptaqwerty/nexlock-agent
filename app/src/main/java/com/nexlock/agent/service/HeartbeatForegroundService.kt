@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.nexlock.agent.MainActivity
@@ -200,6 +201,16 @@ class HeartbeatForegroundService : Service() {
         fun start(context: Context) {
             val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as? DevicePolicyManager
             if (dpm == null || !dpm.isDeviceOwnerApp(context.packageName)) return
+
+            // Checked here, not at each of this function's four call sites (BootReceiver,
+            // ProvisioningHandshakeWorker, AgentViewModel's post-handshake path, CommandDispatcher's
+            // RESTART_SYNC_SERVICE) — see TokenManager.isSyncServiceDisabled's doc comment for why
+            // centralizing this one check matters: nothing should be able to silently restart this
+            // service against an explicit admin decision for this specific device.
+            if (TokenManager(context).isSyncServiceDisabled()) {
+                Log.i("HeartbeatForegroundService", "start() skipped — sync service disabled for this device")
+                return
+            }
 
             val intent = Intent(context, HeartbeatForegroundService::class.java)
             ContextCompat.startForegroundService(context, intent)

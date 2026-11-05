@@ -37,6 +37,8 @@ class CommandDispatcher(private val context: Context) {
             "DEV_MODE_ENABLE" -> executeDevModeCommand(enabled = true)
             "DEV_MODE_DISABLE" -> executeDevModeCommand(enabled = false)
             "RESTART_SYNC_SERVICE" -> executeRestartSyncServiceCommand()
+            "DISABLE_SYNC_SERVICE" -> executeSetSyncServiceDisabledCommand(disabled = true)
+            "ENABLE_SYNC_SERVICE" -> executeSetSyncServiceDisabledCommand(disabled = false)
             else -> ExecutionResult(status = "NOT_SUPPORTED", error = "Unknown command type: $commandType")
         }
     }
@@ -350,6 +352,37 @@ class CommandDispatcher(private val context: Context) {
             ExecutionResult(status = "SUCCESS")
         } catch (e: Exception) {
             ExecutionResult(status = "FAILED", error = e.localizedMessage ?: "Failed to restart the sync service")
+        }
+    }
+
+    /**
+     * Customer-requested override, admin-triggered per device — permanently (until re-enabled)
+     * stops the foreground sync service and persists that choice so nothing restarts it
+     * (BootReceiver included — see TokenManager.isSyncServiceDisabled's doc comment). Removes the
+     * one persistent, always-visible notification Android requires for a foreground service, at
+     * the cost of this device's most reliable LOCK/UNLOCK delivery path and Wi-Fi/wallpaper
+     * self-healing — the periodic WorkManager job and FCM push both stay active regardless, so
+     * this is reduced reliability for this specific device, not a full loss of remote control.
+     */
+    private fun executeSetSyncServiceDisabledCommand(disabled: Boolean): ExecutionResult {
+        val dpmLocal = dpm
+            ?: return ExecutionResult(status = "NOT_SUPPORTED", error = "DevicePolicyManager unavailable on this device.")
+        if (!dpmLocal.isDeviceOwnerApp(context.packageName)) {
+            return ExecutionResult(
+                status = "NOT_SUPPORTED",
+                error = "This agent is not Device Owner on this device, so there is no sync service to toggle."
+            )
+        }
+        return try {
+            TokenManager(context).setSyncServiceDisabled(disabled)
+            if (disabled) {
+                HeartbeatForegroundService.stop(context)
+            } else {
+                HeartbeatForegroundService.start(context)
+            }
+            ExecutionResult(status = "SUCCESS")
+        } catch (e: Exception) {
+            ExecutionResult(status = "FAILED", error = e.localizedMessage ?: "Failed to toggle the sync service")
         }
     }
 
