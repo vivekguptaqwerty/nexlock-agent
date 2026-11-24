@@ -26,8 +26,8 @@ android {
         applicationId = "com.nexlock.agent"
         minSdk = 26
         targetSdk = 34
-        versionCode = 45
-        versionName = "1.0.45"
+        versionCode = 46
+        versionName = "1.0.46"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -66,6 +66,10 @@ android {
     }
     buildFeatures {
         compose = true
+        // Generates BuildConfig (incl. VERSION_NAME) — read by DeviceTelemetry.readAppVersion()
+        // as the authoritative version instead of a runtime PackageManager lookup, which returned
+        // null on Android 16 and made every A16 device report "1.0.0".
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.8"

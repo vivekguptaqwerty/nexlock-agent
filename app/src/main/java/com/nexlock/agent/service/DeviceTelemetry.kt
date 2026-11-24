@@ -13,6 +13,7 @@ import android.os.StatFs
 import android.telephony.TelephonyManager
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
+import com.nexlock.agent.BuildConfig
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -169,11 +170,18 @@ object DeviceTelemetry {
     }
 
     private fun readAppVersion(context: Context): String {
-        return try {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0.0"
-        } catch (e: Exception) {
-            "1.0.0"
-        }
+        // BuildConfig.VERSION_NAME is baked in from build.gradle's versionName at compile time —
+        // always the true build version, never null, never throws. The previous runtime lookup
+        // (PackageManager.getPackageInfo(..., 0).versionName) returned null on Android 16 (API 36),
+        // tripping the "1.0.0" fallback so every Android 16 device reported the wrong agent version
+        // and looked permanently out-of-date to the backend's updateAvailable check. Kept
+        // PackageManager as a secondary fallback purely for defensiveness.
+        return BuildConfig.VERSION_NAME
+            ?: try {
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0.0"
+            } catch (e: Exception) {
+                "1.0.0"
+            }
     }
 
     private fun isoTimestampNow(): String {
