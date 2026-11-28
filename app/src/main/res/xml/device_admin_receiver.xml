@@ -14,4 +14,13 @@
         <disable-keyguard-features />
         <limit-password />
     </uses-policies>
+    <!--
+      Required for the Redmi/Poco bootstrap flow: Google's TestDPC becomes Device Owner via QR,
+      then transfers ownership to this receiver. DevicePolicyManager.transferOwnership() rejects
+      any target whose admin metadata doesn't declare this (DeviceAdminInfo.supportsTransferOwnership()
+      must be true), failing with a Preconditions.checkArgument RemoteException. Harmless on every
+      other brand — it only enables being a transfer target, nothing is transferred unless a
+      current owner explicitly initiates it.
+    -->
+    <support-transfer-ownership />
 </device-admin>

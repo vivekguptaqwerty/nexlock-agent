@@ -46,6 +46,20 @@ class NexLockDeviceAdminReceiver : DeviceAdminReceiver() {
         TermsAcceptanceActivity.launchForAutoFlow(context, enrollmentToken, otp, serverUrl)
     }
 
+    /**
+     * Fires when this app becomes Device Owner via DevicePolicyManager.transferOwnership() — the
+     * Redmi/Poco bootstrap path, where Google's TestDPC is the temporary Device Owner and hands
+     * off to us. onProfileProvisioningComplete is NOT called in this case, so this is the parallel
+     * entry point. The incoming bundle is TestDPC's fixed placeholder (it can't forward our
+     * enrollmentToken/otp), so instead of reading it we claim those from the backend by IMEI off
+     * the receiver thread — see BootstrapClaimWorker.
+     */
+    override fun onTransferOwnershipComplete(context: Context, bundle: PersistableBundle?) {
+        super.onTransferOwnershipComplete(context, bundle)
+        Log.i(TAG, "Device Owner received via ownership transfer — starting bootstrap enrollment claim")
+        BootstrapClaimWorker.enqueue(context)
+    }
+
     @Suppress("DEPRECATION")
     private fun provisioningExtras(intent: Intent): PersistableBundle? {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

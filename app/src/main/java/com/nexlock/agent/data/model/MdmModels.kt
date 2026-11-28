@@ -41,6 +41,21 @@ data class HandshakeData(
     @Json(name = "notificationVisibilityMinutes") val notificationVisibilityMinutes: Long = 120
 )
 
+// Redmi/Poco bootstrap flow only — the agent becomes Device Owner via TestDPC ownership transfer,
+// which can't carry the enrollmentToken/otp the QR path embeds, so the agent claims them from the
+// backend by IMEI. See BootstrapClaimWorker and backend POST /api/v1/mdm/bootstrap-claim.
+@JsonClass(generateAdapter = true)
+data class BootstrapClaimRequest(
+    @Json(name = "imei") val imei: String
+)
+
+@JsonClass(generateAdapter = true)
+data class BootstrapClaimData(
+    @Json(name = "enrollmentToken") val enrollmentToken: String? = null,
+    @Json(name = "otp") val otp: String? = null,
+    @Json(name = "serverUrl") val serverUrl: String? = null
+)
+
 @JsonClass(generateAdapter = true)
 data class HeartbeatRequest(
     @Json(name = "batteryLevel") val batteryLevel: Int? = null,

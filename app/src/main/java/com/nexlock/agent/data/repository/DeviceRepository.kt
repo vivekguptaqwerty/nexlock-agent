@@ -6,6 +6,21 @@ import com.nexlock.agent.service.DeviceRestrictionPolicy
 
 class DeviceRepository {
 
+    // Redmi/Poco bootstrap flow only — recovers the enrollmentToken/otp for this device by IMEI
+    // after an ownership transfer, since the transfer carries neither. See BootstrapClaimWorker.
+    suspend fun claimBootstrapEnrollment(imei: String): Result<BootstrapClaimData> {
+        return try {
+            val response = NetworkModule.apiService.claimBootstrap(BootstrapClaimRequest(imei = imei))
+            if (response.isSuccessful && response.body()?.success == true) {
+                Result.success(response.body()!!.data!!)
+            } else {
+                Result.failure(Exception(NetworkModule.errorMessage(response) ?: "Bootstrap claim rejected by server"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun performHandshake(
         enrollmentToken: String?,
         otp: String?,

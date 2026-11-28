@@ -11,6 +11,14 @@ interface MdmApiService {
         @Body request: HandshakeRequest
     ): Response<ApiResponse<HandshakeData>>
 
+    // Redmi/Poco bootstrap flow only — unauthenticated (same as the handshake): after NexLock
+    // becomes Device Owner via TestDPC ownership transfer, it recovers its enrollmentToken/otp by
+    // IMEI since the transfer bundle can't carry them. See BootstrapClaimWorker.
+    @POST("api/v1/mdm/bootstrap-claim")
+    suspend fun claimBootstrap(
+        @Body request: BootstrapClaimRequest
+    ): Response<ApiResponse<BootstrapClaimData>>
+
     @POST("api/v1/mdm/devices/heartbeat")
     suspend fun sendHeartbeat(
         @Header("Authorization") bearerToken: String,
